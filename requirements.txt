@@ -1,0 +1,4 @@
+stringscore
+numpy
+tabulate
+ipython
