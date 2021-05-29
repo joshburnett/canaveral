@@ -1,301 +1,129 @@
 from __future__ import annotations
-
-from dataclasses import dataclass, field
-from pathlib import Path
-from copy import deepcopy
-
-from stringscore import liquidmetal
-from tabulate import tabulate
-import numpy as np
-
 from typing import List, Optional, Dict
 
+from pathlib import Path
+
+from PySide6 import QtCore, QtGui, QtWidgets, QtUiTools
+from PySide6.QtWidgets import (QApplication, QWidget, QPushButton, QMessageBox, QMainWindow, QLabel, QListWidget,
+                               QLineEdit)
+
+from PySide6.QtCore import Qt
+
+from loguru import logger
+
+import resources_rc
+from basemodels import SearchPathEntry, Catalog, QuerySet
+from qtmodels import LaunchListModel
+from widgets import CharLineEdit, CharListWidget
 
 
-#%% Scoring methods & weights:
-# - Most recently selected for given query
-# ? Current query is initial substring of a query for which this was the most recently selected
-# - Consecutive matching letters in name
-# - Initial letters of words
-# - Non-consecutive matching letters in name
-# ? Consecutive matching letters in path
-# - Non-consecutive matching letters in path
+class CanaveralWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
 
-CONSEC_NAME_WEIGHT = 1
-INITIAL_LETTERS_NAME_WEIGHT = 1
-NONCONSEC_NAME_WEIGHT = 0.5
-NONCONSEC_PATH_WEIGHT = 0.25
-WORD_SEPARATORS = ' \t_-'
+        self.dragging = False
+        self.drag_start_point = None
+        self.max_launch_list_entries = 10
 
+        self.search_path_entries = [
+            SearchPathEntry(path=Path(r'~').expanduser())
+        ]
 
-#%%
-@dataclass
-class CatalogItem:
-    full_path: Path
-    name: str = field(repr=False)
-    lower_path: str = field(repr=False)
-    lower_name: str = field(repr=False)
+        self.catalog = Catalog(self.search_path_entries)
+        logger.debug(f'Catalog has {len(self.catalog.items)} entries')
+        self.query_set = QuerySet(catalog=self.catalog)
+        # self.query_set.create_query('doc')
 
-    def __init__(self, full_path: Path):
-        self.full_path = full_path
-        self.name = full_path.name
-        self.lower_path = str(full_path).lower()
-        self.lower_name = self.name.lower()
+        self.model = LaunchListModel(catalog=self.catalog, query_set=self.query_set)
+        self.model.set_query('do')
+        self.setup()
 
+        self.launch_list_view.setModel(self.model)
+        self.update_launch_list_size()
+        self.line_input.textChanged.connect(self.update_query)
+        
+        # self.model.dataChanged.connect(self.launch_list_view.dataChanged())
 
-@dataclass
-class SearchPathEntry:
-    path: Path
-    patterns: List[str] = field(default_factory=lambda: ['*'])
-    include_root: bool = False
-    search_depth: int = 0
+    def setup(self):
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_AlwaysShowToolTips)
+        self.setAttribute(Qt.WA_InputMethodEnabled)
+        self.setFocusPolicy(Qt.ClickFocus)
 
+        self.label = QLabel(parent=self)
+        # bg_pixmap = QtGui.QPixmap('resources/Black_Glass/frame.png')
+        bg_pixmap = QtGui.QPixmap(':/styles/frame')
+        self.label.setPixmap(bg_pixmap)
+        self.label.resize(bg_pixmap.size())
+        self.label.move(0, 0)
+        self.resize(self.label.size())
 
-# TODO: Add search options: recursion level (from -1), include root
-@dataclass
-class Catalog:
-    items: List[CatalogItem]
+        self.line_input = CharLineEdit(parent=self)
+        self.line_input.setObjectName('input')
+        self.line_input.resize(200, 20)
+        self.line_input.move(40, 20)
+        self.line_input.setAutoFillBackground(True)
 
-    def __init__(self, search_paths: List[SearchPathEntry]):
-        self.items = []
-        for entry in search_paths:
-            for pattern in entry.patterns:
-                if pattern == '.dir':
-                    # TODO: implement directory handling
-                    continue
-                self.items += [CatalogItem(item_path) for item_path in entry.path.glob(pattern)]
+        self.launch_list_view = CharListWidget(parent=self)
+        self.launch_list_view.setAutoFillBackground(True)
+        self.launch_list_view.setIconSize(QtCore.QSize(32, 32))
+        # self.launch_list_view.resize(500, 200)
+        style_file = QtCore.QFile(':/styles/style')
+        style_file.open(QtCore.QFile.ReadOnly | QtCore.QIODevice.Text)
+        stream = QtCore.QTextStream(style_file)
+        style_data = stream.readAll()
+        self.setStyleSheet(style_data)
+        style_file.close()
 
+        self.show()
 
-@dataclass
-class Score:
-    consecutive_name: float = 0
-    liquidmetal_path: float = 0
-    liquidmetal_name: float = 0
-    nonconsecutive_name: float = 0
-    nonconsecutive_path: float = 0
-    initial_letters_name: float = 0
-    result: float = 0
+    def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
+        if event.buttons() == Qt.LeftButton:
+            self.dragging = True
+            self.drag_start_point = event.pos()
+            self.activateWindow()
+            self.line_input.setFocus()
 
-    def update_total(self):
-        self.result = self.consecutive_name * CONSEC_NAME_WEIGHT + \
-                      self.nonconsecutive_name * NONCONSEC_NAME_WEIGHT + \
-                      self.nonconsecutive_path * NONCONSEC_PATH_WEIGHT + \
-                      self.initial_letters_name * INITIAL_LETTERS_NAME_WEIGHT
+    def mouseMoveEvent(self, event: QtGui.QMouseEvent) -> None:
+        if event.buttons() == Qt.LeftButton and self.dragging:
+            p = event.globalPos() - self.drag_start_point
+            self.move(p)
+            self.line_input.setFocus()
+            self.launch_list_view.move(p)
 
+    def mouseReleaseEvent(self, event: QtGui.QMouseEvent) -> None:
+        self.dragging = False
+        self.line_input.setFocus()
 
-@dataclass
-class MatchDetails:
-    text: str
-    match_chars: List[str] = field(default_factory=list)
-    match_indices: List[int] = field(default_factory=list)
+    def update_launch_list_size(self):
+        main_window_geometry = self.geometry()
+        x_margin = 40
+        y_margin = 20
+        width = main_window_geometry.width() - 2*x_margin
+        x = x_margin
+        y = main_window_geometry.height() - y_margin
+        index = self.launch_list_view.model().index(0, 0)
+        item_height = self.launch_list_view.model().data(index, Qt.SizeHintRole)
+        num_items = min(self.max_launch_list_entries, self.model.rowCount(index))
+        height = self.max_launch_list_entries * item_height.height() + \
+                 (self.max_launch_list_entries-1)*self.launch_list_view.spacing() + 4  # 4 is presumably for a border?
+        self.launch_list_view.setGeometry(x, y, width, height)
+        self.resize(self.width(), self.label.height()-y_margin+height)
+        # self.setSi
+        # self.launch_list_view.move(40, 60)
 
-    def update_with_new_char(self, new_char):
-        # TODO: Check for match. Return new MatchDetails object w/ updated query info if match, otherwise return None.
-        # Get the index to start searching
-        try:
-            start_char = self.match_indices[-1]+1
-        except IndexError:
-            start_char = 0
-
-        try:
-            self.match_indices.append(self.text[start_char:].index(new_char) + start_char)
-            self.match_chars.append(new_char)
-        except ValueError:
-            return False
-
-        return True
-
-    @property
-    def matched_chars(self):
-        str_list = []
-        last_match_index = -1
-        for index in self.match_indices:
-            str_list.extend([self.text[last_match_index + 1:index],
-                             f'<{self.text[index].upper()}>'])
-            last_match_index = index
-        str_list.append(self.text[last_match_index + 1:])
-        return ''.join(str_list)
-
-    def print_matched_chars(self):
-        print(self.matched_chars)
+    def update_query(self, query_string):
+        self.model.set_query(query_string)
 
 
-@dataclass
-class Query:
-    new_char: str
-    query_so_far: str
-    catalog: Catalog = field(repr=False)
-    score_set: Dict[int: Score] = field(repr=False)
-    match_details_set_paths: Dict[int: MatchDetails] = field(repr=False)
-    match_details_set_names: Dict[int: MatchDetails] = field(repr=False)
 
-    def __init__(self, new_char: str, old_query: Optional[Query] = None, catalog: Optional[Catalog] = None):
-        self.new_char = new_char
-        if old_query is None:
-            self.query_so_far = self.new_char
-            if catalog is None:
-                raise RuntimeError('Must specify either old_query or catalog when creating a new Query object')
-            self.catalog = catalog
-            self.match_details_set_paths = {catalog_index: MatchDetails(text=catalog.items[catalog_index].lower_path)
-                                            for catalog_index in range(len(catalog.items))}
-            self.match_details_set_names = {catalog_index: MatchDetails(text=catalog.items[catalog_index].lower_name)
-                                            for catalog_index in range(len(catalog.items))}
-        else:
-            self.query_so_far = old_query.query_so_far + new_char
-            self.catalog = old_query.catalog
-            self.match_details_set_paths = deepcopy(old_query.match_details_set_paths)
-            self.match_details_set_names = deepcopy(old_query.match_details_set_names)
+def run():
+    app = QApplication([])
 
-        self.score_set = {catalog_index: Score() for catalog_index in self.match_details_set_paths}
-
-        self._update_matches()
-        self._update_scores()
-
-    def _update_matches(self):
-        # First check dict of full path matches for new character
-        #   Store new match data when new char is found
-        #   Prune full path and name dicts if not found
-        # Check list of name matches for new character
-        #   Store new match data when new char is found
-        #   Prune name dict if not found
-
-        # First check dict of full path matches for new character
-        drop_indices = []
-        for catalog_index, match_details in self.match_details_set_paths.items():
-            if not match_details.update_with_new_char(self.new_char):
-                drop_indices.append(catalog_index)
-
-        for catalog_index in drop_indices:
-            # Can use del since the key is guaranteed to exist (faster than .pop()).
-            del self.match_details_set_paths[catalog_index]
-
-            # If the character isn't in the full path, then it won't be in the name alone either.
-            #   (Using .pop() because the key may have already been deleted earlier.)
-            self.match_details_set_names.pop(catalog_index, None)
-
-        # Then check list of name matches for new character
-        drop_indices = []
-        for catalog_index, match_details in self.match_details_set_names.items():
-            result = match_details.update_with_new_char(self.new_char)
-            if not result:
-                drop_indices.append(catalog_index)
-
-        for catalog_index in drop_indices:
-            # As with above, using .pop() because the key may have already been deleted earlier.
-            self.match_details_set_names.pop(catalog_index, None)
-
-    def _update_scores(self):
-        score_set = self.score_set
-        query_so_far = self.query_so_far
-
-        for catalog_index, match in self.match_details_set_names.items():
-            score = score_set[catalog_index]
-            score.liquidmetal_name = liquidmetal.score(match.text, query_so_far)
-            score.nonconsecutive_name = len(match.match_indices)
-            score.consecutive_name = np.count_nonzero(np.diff(np.array(match.match_indices)) == 1)
-            new_word_score = 0
-            for char_index in match.match_indices:
-                if match.text[char_index - 1] in WORD_SEPARATORS:
-                    new_word_score += 1
-            score.initial_letters_name = new_word_score
-
-        for catalog_index, match in self.match_details_set_paths.items():
-            score_set[catalog_index].liquidmetal_path = liquidmetal.score(match.text, query_so_far)
-            score_set[catalog_index].nonconsecutive_path = len(match.match_indices)
-            score_set[catalog_index].update_total()
-
-    @property
-    def sorted_scores(self):
-        return sorted([(self.score_set[catalog_index].result, catalog_index,
-                        self.catalog.items[catalog_index].full_path)
-                       for catalog_index in self.match_details_set_paths],
-                      key=lambda item: item[0], reverse=True)
-
-    def print_matched_name_chars(self):
-        for match in self.match_details_set_names.values():
-            match.print_matched_chars()
-
-    def print_matched_path_chars(self):
-        for match in self.match_details_set_paths.values():
-            match.print_matched_chars()
-
-    def print_scores(self):
-        scores = self.score_set
-        sorted_scores = self.sorted_scores
-        total_scores = [result[0] for result in sorted_scores]
-        catalog_indices = [result[1] for result in sorted_scores]
-        full_paths = [result[2] for result in sorted_scores]
-        liquidmetal_path_scores = [scores[catalog_index].liquidmetal_path
-                                   for catalog_index in catalog_indices]
-        liquidmetal_name_scores = [scores[catalog_index].liquidmetal_name
-                                   for catalog_index in catalog_indices]
-
-        print(f'\n\nQuery: {self.query_so_far}')
-        print(f'{len(sorted_scores)} matches\n')
-        print(tabulate({
-            'Total Score': total_scores,
-            'LiquidMetal Path Score': liquidmetal_path_scores,
-            'LiquidMetal Name Score': liquidmetal_name_scores,
-            'Catalog Index': catalog_indices,
-            'Full Path': full_paths,
-        }, headers='keys'))
-
-    def print_detailed_scores(self):
-        scores = self.score_set
-        sorted_scores = self.sorted_scores
-        total_scores = [result[0] for result in sorted_scores]
-        catalog_indices = [result[1] for result in sorted_scores]
-        full_paths = [result[2] for result in sorted_scores]
-        consec_name_scores = [scores[catalog_index].consecutive_name
-                              for catalog_index in catalog_indices]
-        initial_letter_scores = [scores[catalog_index].initial_letters_name
-                                 for catalog_index in catalog_indices]
-        nonconsec_name_scores = [scores[catalog_index].nonconsecutive_name
-                                 for catalog_index in catalog_indices]
-        nonconsec_path_scores = [scores[catalog_index].nonconsecutive_path
-                                 for catalog_index in catalog_indices]
-        liquidmetal_path_scores = [scores[catalog_index].liquidmetal_path
-                                   for catalog_index in catalog_indices]
-        liquidmetal_name_scores = [scores[catalog_index].liquidmetal_name
-                                   for catalog_index in catalog_indices]
-
-        print(f'\n\nQuery: {self.query_so_far}')
-        print(f'{len(sorted_scores)} matches\n')
-        print(tabulate({
-            'Total Score': total_scores,
-            'LiquidMetal Path Score': liquidmetal_path_scores,
-            'LiquidMetal Name Score': liquidmetal_name_scores,
-            'Catalog Index': catalog_indices,
-            'Consecutive Name': consec_name_scores,
-            'Initial Letter': initial_letter_scores,
-            'Non-consec Name': nonconsec_name_scores,
-            'Non-consec Path': nonconsec_path_scores,
-            'Full Path': full_paths,
-        }, headers='keys'))
+    main_window = CanaveralWindow()
+    app.exec()
 
 
-@dataclass
-class QuerySet:
-    catalog: Catalog
-    queries: Dict[str: Query] = field(default_factory=dict)
-
-    def create_query(self, query_string):
-        # Cases:
-        # - Same as existing query
-        #   - Look up & return existing query
-        # - New single-letter query
-        #   - Start a new query, store & return it
-        # - At least partially based on an old query
-        #   Naive implementation
-        #   - Take a letter off the end and recurse in until either a base query is found or at an empty query string
-        #       - Return the base query if found
-        #       - If at an empty string, start a new one
-        #   - Return the base query and build up one letter at a time until we reach the
-        if query_string not in self.queries:
-            if len(query_string) == 1:
-                self.queries[query_string] = Query(new_char=query_string, catalog=self.catalog)
-            else:
-                sub_query = self.create_query(query_string=query_string[:-1])
-                self.queries[query_string] = Query(new_char=query_string[-1], old_query=sub_query)
-
-        return self.queries[query_string]
+if __name__ == '__main__':
+    run()

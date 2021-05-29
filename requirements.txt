@@ -2,3 +2,5 @@ stringscore
 numpy
 tabulate
 ipython
+pyside6
+loguru
