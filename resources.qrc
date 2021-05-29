@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="styles">
+    <file alias="frame">resources/Black_Glass/frame.png</file>
+    <file alias="style">resources/Black_Glass/style.qss</file>
+  </qresource>
+</RCC>
