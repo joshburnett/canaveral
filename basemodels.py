@@ -33,13 +33,11 @@ WORD_SEPARATORS = ' \t_-'
 class CatalogItem:
     full_path: Path
     name: str = field(repr=False)
-    lower_path: str = field(repr=False)
     lower_name: str = field(repr=False)
 
     def __init__(self, full_path: Path):
         self.full_path = full_path
         self.name = full_path.name
-        self.lower_path = str(full_path).lower()
         self.lower_name = self.name.lower()
 
 
@@ -69,17 +67,14 @@ class Catalog:
 @dataclass
 class Score:
     consecutive_name: float = 0
-    liquidmetal_path: float = 0
     liquidmetal_name: float = 0
     nonconsecutive_name: float = 0
-    nonconsecutive_path: float = 0
     initial_letters_name: float = 0
     result: float = 0
 
     def update_total(self):
         self.result = self.consecutive_name * CONSEC_NAME_WEIGHT + \
                       self.nonconsecutive_name * NONCONSEC_NAME_WEIGHT + \
-                      self.nonconsecutive_path * NONCONSEC_PATH_WEIGHT + \
                       self.initial_letters_name * INITIAL_LETTERS_NAME_WEIGHT
 
 
@@ -133,7 +128,6 @@ class Query:
     query_so_far: str
     catalog: Catalog = field(repr=False)
     score_set: Dict[int: Score] = field(repr=False)
-    match_details_set_paths: Dict[int: MatchDetails] = field(repr=False)
     match_details_set_names: Dict[int: MatchDetails] = field(repr=False)
     sorted_items: List[CatalogItem] = field(default_factory=list)
 
@@ -144,44 +138,21 @@ class Query:
             if catalog is None:
                 raise RuntimeError('Must specify either old_query or catalog when creating a new Query object')
             self.catalog = catalog
-            self.match_details_set_paths = {catalog_index: MatchDetails(text=catalog.items[catalog_index].lower_path)
-                                            for catalog_index in range(len(catalog.items))}
             self.match_details_set_names = {catalog_index: MatchDetails(text=catalog.items[catalog_index].lower_name)
                                             for catalog_index in range(len(catalog.items))}
         else:
             self.query_so_far = old_query.query_so_far + new_char
             self.catalog = old_query.catalog
-            self.match_details_set_paths = deepcopy(old_query.match_details_set_paths)
             self.match_details_set_names = deepcopy(old_query.match_details_set_names)
 
-        self.score_set = {catalog_index: Score() for catalog_index in self.match_details_set_paths}
+        self.score_set = {catalog_index: Score() for catalog_index in self.match_details_set_names}
 
         self._update_matches()
         self._update_scores()
 
     def _update_matches(self):
-        # First check dict of full path matches for new character
-        #   Store new match data when new char is found
-        #   Prune full path and name dicts if not found
-        # Check list of name matches for new character
-        #   Store new match data when new char is found
-        #   Prune name dict if not found
-
-        # First check dict of full path matches for new character
         drop_indices = []
-        for catalog_index, match_details in self.match_details_set_paths.items():
-            if not match_details.update_with_new_char(self.new_char):
-                drop_indices.append(catalog_index)
-
-        for catalog_index in drop_indices:
-            # Can use del since the key is guaranteed to exist (faster than .pop()).
-            del self.match_details_set_paths[catalog_index]
-
-            # If the character isn't in the full path, then it won't be in the name alone either.
-            #   (Using .pop() because the key may have already been deleted earlier.)
-            self.match_details_set_names.pop(catalog_index, None)
-
-        # Then check list of name matches for new character
+        # Check list of name matches for new character
         drop_indices = []
         for catalog_index, match_details in self.match_details_set_names.items():
             result = match_details.update_with_new_char(self.new_char)
@@ -189,8 +160,9 @@ class Query:
                 drop_indices.append(catalog_index)
 
         for catalog_index in drop_indices:
-            # As with above, using .pop() because the key may have already been deleted earlier.
-            self.match_details_set_names.pop(catalog_index, None)
+            # Can use del since the key is guaranteed to exist (faster than .pop()).
+            del self.match_details_set_names[catalog_index]
+            # self.match_details_set_names.pop(catalog_index, None)
 
     def _update_scores(self):
         score_set = self.score_set
@@ -206,16 +178,12 @@ class Query:
                 if match.text[char_index - 1] in WORD_SEPARATORS:
                     new_word_score += 1
             score.initial_letters_name = new_word_score
-
-        for catalog_index, match in self.match_details_set_paths.items():
-            score_set[catalog_index].liquidmetal_path = liquidmetal.score(match.text, query_so_far)
-            score_set[catalog_index].nonconsecutive_path = len(match.match_indices)
             score_set[catalog_index].update_total()
 
         self.sorted_score_results = sorted([ScoreResult(item=self.catalog.items[catalog_index],
                                                         total_score=self.score_set[catalog_index].result,
                                                         catalog_index=catalog_index)
-                                            for catalog_index in self.match_details_set_paths],
+                                            for catalog_index in self.match_details_set_names],
                                            key=lambda result: result.total_score, reverse=True)
 
     # @property
@@ -229,17 +197,11 @@ class Query:
         for match in self.match_details_set_names.values():
             match.print_matched_chars()
 
-    def print_matched_path_chars(self):
-        for match in self.match_details_set_paths.values():
-            match.print_matched_chars()
-
     def print_scores(self):
         scores = self.score_set
         total_scores = [result.total_score for result in self.sorted_score_results]
         catalog_indices = [result.catalog_index for result in self.sorted_score_results]
         full_paths = [result.item.full_path for result in self.sorted_score_results]
-        liquidmetal_path_scores = [scores[catalog_index].liquidmetal_path
-                                   for catalog_index in catalog_indices]
         liquidmetal_name_scores = [scores[catalog_index].liquidmetal_name
                                    for catalog_index in catalog_indices]
 
@@ -247,7 +209,6 @@ class Query:
         print(f'{len(self.sorted_score_results)} matches\n')
         print(tabulate({
             'Total Score': total_scores,
-            'LiquidMetal Path Score': liquidmetal_path_scores,
             'LiquidMetal Name Score': liquidmetal_name_scores,
             'Catalog Index': catalog_indices,
             'Full Path': full_paths,
@@ -264,10 +225,6 @@ class Query:
                                  for catalog_index in catalog_indices]
         nonconsec_name_scores = [scores[catalog_index].nonconsecutive_name
                                  for catalog_index in catalog_indices]
-        nonconsec_path_scores = [scores[catalog_index].nonconsecutive_path
-                                 for catalog_index in catalog_indices]
-        liquidmetal_path_scores = [scores[catalog_index].liquidmetal_path
-                                   for catalog_index in catalog_indices]
         liquidmetal_name_scores = [scores[catalog_index].liquidmetal_name
                                    for catalog_index in catalog_indices]
 
@@ -275,13 +232,11 @@ class Query:
         print(f'{len(self.sorted_score_results)} matches\n')
         print(tabulate({
             'Total Score': total_scores,
-            'LiquidMetal Path Score': liquidmetal_path_scores,
             'LiquidMetal Name Score': liquidmetal_name_scores,
             'Catalog Index': catalog_indices,
             'Consecutive Name': consec_name_scores,
             'Initial Letter': initial_letter_scores,
             'Non-consec Name': nonconsec_name_scores,
-            'Non-consec Path': nonconsec_path_scores,
             'Full Path': full_paths,
         }, headers='keys'))
 

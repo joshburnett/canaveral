@@ -40,8 +40,8 @@ class CanaveralWindow(QMainWindow):
 
         self.launch_list_view.setModel(self.model)
         self.update_launch_list_size()
-        self.line_input.textChanged.connect(self.update_query)
-        
+        self.line_input.textEdited.connect(self.update_query)
+
         # self.model.dataChanged.connect(self.launch_list_view.dataChanged())
 
     def setup(self):
@@ -113,8 +113,8 @@ class CanaveralWindow(QMainWindow):
         # self.setSi
         # self.launch_list_view.move(40, 60)
 
-    def update_query(self, query_string):
-        self.model.set_query(query_string)
+    def update_query(self, query_text):
+        self.model.set_query(query_text)
 
 
 
