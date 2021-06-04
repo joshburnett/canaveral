@@ -13,14 +13,14 @@ class CharLineEdit(QLineEdit):
     def __init__(self, parent):
         super().__init__(parent)
 
-    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
-        key = event.key()
-        logger.debug(key)
-
-        if key == Qt.Key_Escape:
-            QApplication.instance().quit()
-        else:
-            super().keyPressEvent(event)
+    # def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
+    #     key = event.key()
+    #     logger.debug(key)
+    #
+    #     if key == Qt.Key_Escape:
+    #         QApplication.instance().quit()
+    #     else:
+    #         super().keyPressEvent(event)
 
 
 class CharListWidget(QListView):

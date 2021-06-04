@@ -15,7 +15,7 @@ class LaunchListModel(QtCore.QAbstractListModel):
 
     def __init__(self, *args, catalog: Catalog, query_set: QuerySet, **kwargs):
         super(LaunchListModel, self).__init__(*args, **kwargs)
-        self.query_string = ''
+        self.query_string = None
         self.query_set = query_set
         self.query = None
         self.catalog = catalog
@@ -23,9 +23,13 @@ class LaunchListModel(QtCore.QAbstractListModel):
         # self.mime_database = QtCore.QMimeDatabase()
         self.file_icon_provider = QtWidgets.QFileIconProvider()
 
-    def set_query(self, query_string: str):
-        self.query_string = query_string
-        self.query = self.query_set.create_query(query_string)
+    def set_query(self, query_string: Optional[str]):
+        if query_string in [None, '']:
+            self.query_string = None
+            self.query = None
+        else:
+            self.query_string = query_string
+            self.query = self.query_set.create_query(query_string)
         self.layoutChanged.emit()
 
     def data(self, index, role):
@@ -59,6 +63,12 @@ class LaunchListModel(QtCore.QAbstractListModel):
             #     return icon
 
     def rowCount(self, index):
+        if self.query is None:
+            return 0
+        else:
+            return len(self.query.sorted_score_results)
+
+    def num_results(self):
         if self.query is None:
             return 0
         else:

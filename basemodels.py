@@ -8,7 +8,7 @@ from stringscore import liquidmetal
 from tabulate import tabulate
 import numpy as np
 
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 
 
 
@@ -129,7 +129,8 @@ class Query:
     catalog: Catalog = field(repr=False)
     score_set: Dict[int: Score] = field(repr=False)
     match_details_set_names: Dict[int: MatchDetails] = field(repr=False)
-    sorted_items: List[CatalogItem] = field(default_factory=list)
+    # sorted_items: List[CatalogItem] = field(default_factory=list)
+    sorted_score_results: Optional[Tuple[ScoreResult]] = None
 
     def __init__(self, new_char: str, old_query: Optional[Query] = None, catalog: Optional[Catalog] = None):
         self.new_char = new_char
@@ -151,7 +152,6 @@ class Query:
         self._update_scores()
 
     def _update_matches(self):
-        drop_indices = []
         # Check list of name matches for new character
         drop_indices = []
         for catalog_index, match_details in self.match_details_set_names.items():
@@ -180,11 +180,11 @@ class Query:
             score.initial_letters_name = new_word_score
             score_set[catalog_index].update_total()
 
-        self.sorted_score_results = sorted([ScoreResult(item=self.catalog.items[catalog_index],
-                                                        total_score=self.score_set[catalog_index].result,
-                                                        catalog_index=catalog_index)
-                                            for catalog_index in self.match_details_set_names],
-                                           key=lambda result: result.total_score, reverse=True)
+        self.sorted_score_results = tuple(sorted([ScoreResult(item=self.catalog.items[catalog_index],
+                                                              total_score=self.score_set[catalog_index].result,
+                                                              catalog_index=catalog_index)
+                                                  for catalog_index in self.match_details_set_names],
+                                                 key=lambda result: result.total_score, reverse=True))
 
     # @property
     # def sorted_scores(self):
