@@ -1,40 +1,28 @@
-from __future__ import annotations
-
-from pathlib import Path
-from basemodels import SearchPathEntry, Catalog, QuerySet, CatalogItem, Query, Match, findall
+from basemodels import Catalog, SearchPathEntry
 from time import perf_counter
+from loguru import logger
 
-from dataclasses import dataclass, replace, field
-from typing import List, Union, Optional, Dict
-from memorysize import get_size
+from paths import search_path_entries
 
-import platform
+#%
+# search_path_entries = [
+#     SearchPathEntry(path='~', patterns=['[!.]*']),
+#     # SearchPathEntry(path='~/code', patterns=['.dir'], search_depth=1),
+#     # SearchPathEntry(path='~/Library/Mobile Documents/com~apple~CloudDocs/Code', patterns=['.dir'], search_depth=0),
+#     # SearchPathEntry(path='~/Downloads', include_root=True),
+# ]
+#
+# c = Catalog(search_path_entries)
+# print(f'Catalog has {len(c.items)} entries')
+# c.items
 
-#%%
-system = platform.system()
-if system == 'Windows':
-    search_path_entries = [
-        SearchPathEntry(path=Path(r'C:\Users\jburnett1\OneDrive - Werfen\Documents\! Beacon')),
-        SearchPathEntry(path=Path(r'C:\Users\jburnett1\code'), patterns=['.dir']),
-        SearchPathEntry(
-            path=Path(r'C:\Users\jburnett1\AppData\Roaming\Microsoft\Windows\Start Menu\Programs'), patterns=['*.lnk']
-        ),
-        SearchPathEntry(path=Path(r'C:\ProgramData\Microsoft\Windows\Start Menu\Programs'), patterns=['*.lnk'])
-    ]
-elif system == 'Darwin':
-    search_path_entries = [
-        SearchPathEntry(path=Path('~')),
-        SearchPathEntry(path=Path('~/code'), patterns=['.dir']),
-        SearchPathEntry(path=Path('~/Downloads')),
-        SearchPathEntry(path=Path('/Users/josh/Library/Mobile Documents/com~apple~CloudDocs'))
-    ]
-else:
-    raise RuntimeError('Platform must be Windows or Darwin')
 
 #%%
 times = [perf_counter()]
 c = Catalog(search_path_entries)
 times.append(perf_counter())
+
+logger.debug(f'Catalog has {len(c.items)} entries')
 
 q = c.query('l')
 times.append(perf_counter())
@@ -46,3 +34,16 @@ q = c.query('love')
 times.append(perf_counter())
 
 etimes = [y-x for x, y in zip(times[:-1], times[1:])]
+
+
+#%%
+from pathlib import Path
+from basemodels import deep_glob
+from pprint import pp
+p = Path('/Users/josh')
+
+# a = list(deep_glob(p, pattern='[!.]*'))
+a = list(deep_glob(p, pattern='[!.]*', include_dotdirs=True))
+# a = list(deep_glob(p, pattern='*'))
+pp(a)
+print(f'List has {len(a)} entries')

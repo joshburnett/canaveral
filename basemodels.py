@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from fnmatch import fnmatch
 from copy import deepcopy
 
 from stringscore import liquidmetal
@@ -9,7 +10,6 @@ from tabulate import tabulate
 import numpy as np
 
 from typing import List, Optional, Dict, Tuple, Union
-
 
 
 #%% Scoring methods & weights:
@@ -29,6 +29,21 @@ WORD_SEPARATORS = ' \t_-'
 
 
 #%%
+def deep_glob(path: Path, depth: int = 0, pattern: str = '*', include_dotdirs=False):
+    # Negative values for depth will descend into all subdirectories
+    try:
+        for child in path.iterdir():
+            if child.is_dir():
+                if include_dotdirs or fnmatch(child.name, '[!.]*'):
+                    yield child
+                    if depth != 0:
+                        yield from deep_glob(path=child, depth=depth - 1, pattern=pattern)
+            elif fnmatch(child.name, pattern):
+                yield child
+    except PermissionError:
+        pass
+
+
 def findall(string, char, start=0):
     index = start-1
     while True:
@@ -38,16 +53,15 @@ def findall(string, char, start=0):
         yield index
 
 
-@dataclass
+@dataclass(frozen=True)
 class CatalogItem:
     full_path: Path
-    name: str = field(repr=False)
-    lower_name: str = field(repr=False)
+    name: Optional[str] = field(repr=False, default=None)
+    lower_name: Optional[str] = field(repr=False, default=None)
 
-    def __init__(self, full_path: Path):
-        self.full_path = full_path
-        self.name = full_path.name
-        self.lower_name = self.name.lower()
+    def __post_init__(self):
+        object.__setattr__(self, 'name', self.full_path.name)
+        object.__setattr__(self, 'lower_name', self.full_path.name.lower())
 
 
 @dataclass
@@ -61,7 +75,6 @@ class SearchPathEntry:
         self.path = Path(self.path)
 
 
-# TODO: Add search options: recursion level (from -1), include root
 @dataclass
 class Catalog:
     items: List[CatalogItem]
@@ -75,16 +88,26 @@ class Catalog:
         self.queries = {}
 
     def _create_items_list(self, search_paths: List[SearchPathEntry]) -> None:
-        self.items = []
+        items = []
         self.queries = {}
         self.search_paths = search_paths
 
-        for entry in search_paths:
-            for pattern in entry.patterns:
+        for search_path in search_paths:
+            expanded_path = search_path.path.expanduser()
+            if search_path.include_root:
+                items.append(CatalogItem(expanded_path))
+            for pattern in search_path.patterns:
                 if pattern == '.dir':
-                    # TODO: implement directory handling
-                    continue
-                self.items += [CatalogItem(item_path) for item_path in entry.path.expanduser().glob(pattern)]
+                    items += [CatalogItem(item_path)
+                              for item_path in deep_glob(expanded_path,
+                                                         depth=search_path.search_depth, pattern='[!.]*')
+                              if item_path.is_dir()]
+                else:
+                    items += [CatalogItem(item_path)
+                              for item_path in deep_glob(expanded_path,
+                                                         depth=search_path.search_depth, pattern=pattern)]
+
+        self.items = list(set(items))
 
     def query(self, query_text: str):
         if query_text not in self.queries:
