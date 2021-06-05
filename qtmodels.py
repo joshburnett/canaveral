@@ -9,7 +9,7 @@ from basemodels import Catalog, QuerySet, Query
 
 
 class LaunchListModel(QtCore.QAbstractListModel):
-    # catalog: Catalog
+    catalog: Catalog
     # query_set: QuerySet
     query: Optional[Query]
 
@@ -29,10 +29,11 @@ class LaunchListModel(QtCore.QAbstractListModel):
             self.query = None
         else:
             self.query_string = query_string
-            self.query = self.query_set.create_query(query_string)
+            self.query = self.catalog.query(query_string)
         self.layoutChanged.emit()
 
-    def data(self, index, role):
+    def data(self, index: Union[QtCore.QModelIndex, QtCore.QPersistentModelIndex],
+             role: int = QtCore.Qt.ItemDataRole.DisplayRole):
         score_result = self.query.sorted_score_results[index.row()]
 
         if role == Qt.DisplayRole:
@@ -62,11 +63,9 @@ class LaunchListModel(QtCore.QAbstractListModel):
             # else:
             #     return icon
 
-    def rowCount(self, index):
-        if self.query is None:
-            return 0
-        else:
-            return len(self.query.sorted_score_results)
+    def rowCount(self, parent: Union[QtCore.QModelIndex, QtCore.QPersistentModelIndex] = QtCore.QModelIndex) -> int:
+        # def rowCount(self, index):
+        return self.num_results()
 
     def num_results(self):
         if self.query is None:

@@ -122,14 +122,15 @@ class CanaveralWindow(QMainWindow):
         width = self.width() - 2*x_margin
         x = x_margin
         y = self.label.height() - y_margin
-        num_items_in_results = self.model.rowCount(0)
+        num_items_in_results = self.model.num_results()
         if num_items_in_results > 0:
             index = self.launch_list_view.model().index(0, 0)
             item_height = self.launch_list_view.model().data(index, Qt.SizeHintRole)
-            num_items = min(self.max_launch_list_entries, num_items_in_results)
+            num_display_items = min(self.max_launch_list_entries, num_items_in_results)
 
             # I guess we need 4px total for the top & bottom border?
-            height = num_items * item_height.height() + (num_items-1)*self.launch_list_view.spacing() + 4
+            height = num_display_items * item_height.height() + \
+                     (num_display_items-1)*self.launch_list_view.spacing() + 4
             self.launch_list_view.setGeometry(x, y, width, height)
             self.resize(self.width(), self.label.height()-y_margin+height)
             self.launch_list_view.show()

@@ -8,7 +8,7 @@ from stringscore import liquidmetal
 from tabulate import tabulate
 import numpy as np
 
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict, Tuple, Union
 
 
 
@@ -29,6 +29,15 @@ WORD_SEPARATORS = ' \t_-'
 
 
 #%%
+def findall(string, char, start=0):
+    index = start-1
+    while True:
+        index = string.find(char, index + 1)
+        if index == -1:
+            break
+        yield index
+
+
 @dataclass
 class CatalogItem:
     full_path: Path
@@ -43,34 +52,130 @@ class CatalogItem:
 
 @dataclass
 class SearchPathEntry:
-    path: Path
+    path: Union[Path, str]
     patterns: List[str] = field(default_factory=lambda: ['*'])
     include_root: bool = False
     search_depth: int = 0
+
+    def __post_init__(self):
+        self.path = Path(self.path)
 
 
 # TODO: Add search options: recursion level (from -1), include root
 @dataclass
 class Catalog:
     items: List[CatalogItem]
+    queries: dict[str, Query]
+    search_paths: List[SearchPathEntry]
 
     def __init__(self, search_paths: List[SearchPathEntry]):
         self.items = []
+        self.search_paths = search_paths
+        self._create_items_list(search_paths)
+        self.queries = {}
+
+    def _create_items_list(self, search_paths: List[SearchPathEntry]) -> None:
+        self.items = []
+        self.queries = {}
+        self.search_paths = search_paths
+
         for entry in search_paths:
             for pattern in entry.patterns:
                 if pattern == '.dir':
                     # TODO: implement directory handling
                     continue
-                self.items += [CatalogItem(item_path) for item_path in entry.path.glob(pattern)]
+                self.items += [CatalogItem(item_path) for item_path in entry.path.expanduser().glob(pattern)]
+
+    def query(self, query_text: str):
+        if query_text not in self.queries:
+            if len(query_text) > 1:
+                self.query(query_text[:-1])
+                self.queries[query_text] = Query(parent=self.queries[query_text[:-1]], query=query_text)
+            else:
+                self.queries[query_text] = Query(parent=self, query=query_text)
+
+        return self.queries[query_text]
 
 
 @dataclass
+class Query:
+    query_text: str
+    matches: List[Match] = field(repr=False)
+    sorted_score_results: Optional[Tuple[ScoreResult]] = field(default=None, repr=False)
+
+    def __init__(self, parent: Union[Catalog, Query], query: str):
+        if type(parent) is Catalog:
+            self.query_text = query[0]
+            self.matches = [Match(catalog_item=item,
+                                  match_chars=query[0],
+                                  match_indices=[i])
+                            for item in parent.items
+                            for i in findall(item.lower_name, query[0])]
+
+        elif type(parent) is Query:
+            self.query_text = query[:len(parent.query_text) + 1]
+            query_len = len(self.query_text)
+
+            self.matches = [Match(catalog_item=match.catalog_item,
+                                  match_chars=query[:query_len],
+                                  match_indices=match.match_indices + [i])
+                            for match in parent.matches
+                            for i in findall(match.catalog_item.lower_name, query[query_len-1], match.match_indices[-1])]
+
+        else:
+            raise TypeError('Query parent must be either a Catalog or another Query object')
+
+        score_results = {}
+        for match in self.matches:
+            if match.catalog_item.full_path not in score_results or \
+                    match.score.result > score_results[match.catalog_item.full_path].total_score:
+                score_results[match.catalog_item.full_path] = ScoreResult(item=match.catalog_item,
+                                                                          match=match,
+                                                                          total_score=match.score.result)
+
+            # score_result = score_results.get(match.catalog_item.full_path,
+            #                                  ScoreResult(item=match.catalog_item, total_score=0))
+            # score_result.total_score += match.score.result
+            # score_results[match.catalog_item.full_path] = score_result
+
+        self.sorted_score_results = tuple(sorted(score_results.values(),
+                                                 key=lambda result: result.total_score, reverse=True))
+
+
+@dataclass
+class Match:
+    catalog_item: CatalogItem
+    match_chars: str = field(default_factory=list)
+    match_indices: List[int] = field(default_factory=list)
+    score: Optional[Score] = None
+
+    def __post_init__(self):
+        new_word_score = 0
+        for char_index in self.match_indices:
+            if self.catalog_item.name[char_index - 1] in WORD_SEPARATORS:
+                new_word_score += 1
+
+        self.score = Score(catalog_item=self.catalog_item,
+                           liquidmetal_name = liquidmetal.score(self.catalog_item.lower_name, self.match_chars),
+                           nonconsecutive_name = len(self.match_indices),
+                           consecutive_name = sum([1 if y-x == 1 else 0 for x, y in
+                                                   zip(self.match_indices[:-1], self.match_indices[1:])]),
+                           initial_letters_name = new_word_score)
+        # self.score.consecutive_name = np.count_nonzero(np.diff(np.array(self.match_indices)) == 1)
+
+
+#%%
+@dataclass
 class Score:
+    catalog_item: CatalogItem
     consecutive_name: float = 0
     liquidmetal_name: float = 0
     nonconsecutive_name: float = 0
     initial_letters_name: float = 0
     result: float = 0
+
+    def __post_init__(self):
+        self.update_total()
 
     def update_total(self):
         self.result = self.consecutive_name * CONSEC_NAME_WEIGHT + \
@@ -81,8 +186,12 @@ class Score:
 @dataclass
 class ScoreResult:
     item: CatalogItem
+    match: Match
     total_score: float
-    catalog_index: int
+    catalog_index: Optional[int] = None
+
+    def __post_init__(self):
+        self.total_score = self.match.score.result
 
 
 @dataclass
@@ -123,7 +232,7 @@ class MatchDetails:
 
 
 @dataclass
-class Query:
+class OldQuery:
     new_char: str
     query_so_far: str
     catalog: Catalog = field(repr=False)
@@ -132,7 +241,7 @@ class Query:
     # sorted_items: List[CatalogItem] = field(default_factory=list)
     sorted_score_results: Optional[Tuple[ScoreResult]] = None
 
-    def __init__(self, new_char: str, old_query: Optional[Query] = None, catalog: Optional[Catalog] = None):
+    def __init__(self, new_char: str, old_query: Optional[OldQuery] = None, catalog: Optional[Catalog] = None):
         self.new_char = new_char
         if old_query is None:
             self.query_so_far = self.new_char
@@ -244,7 +353,7 @@ class Query:
 @dataclass
 class QuerySet:
     catalog: Catalog
-    queries: Dict[str: Query] = field(default_factory=dict)
+    queries: Dict[str: OldQuery] = field(default_factory=dict)
 
     def create_query(self, query_string):
         # Cases:
@@ -260,9 +369,9 @@ class QuerySet:
         #   - Return the base query and build up one letter at a time until we reach the
         if query_string not in self.queries:
             if len(query_string) == 1:
-                self.queries[query_string] = Query(new_char=query_string, catalog=self.catalog)
+                self.queries[query_string] = OldQuery(new_char=query_string, catalog=self.catalog)
             else:
                 sub_query = self.create_query(query_string=query_string[:-1])
-                self.queries[query_string] = Query(new_char=query_string[-1], old_query=sub_query)
+                self.queries[query_string] = OldQuery(new_char=query_string[-1], old_query=sub_query)
 
         return self.queries[query_string]
