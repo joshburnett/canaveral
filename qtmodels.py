@@ -50,18 +50,21 @@ class LaunchListModel(QtCore.QAbstractListModel):
         elif role == Qt.SizeHintRole:
             return QtCore.QSize(36, 36)
 
-            # mime_types = self.mime_database.mimeTypesForFileName(self._items[index.row()].name)
-            #
-            # icon = QtGui.QIcon()
-            # for mime_type in mime_types:
-            #     icon = QtGui.QIcon.fromTheme(mime_type.iconName())
-            #     if icon.isNull():
-            #         break
-            #
-            # if icon.isNull():
-            #     return QtWidgets.QApplication.style().standardIcon(QtWidgets.QStyle.SP_FileIcon)
-            # else:
-            #     return icon
+        elif role == Qt.UserRole:
+            return score_result.item
+
+        # mime_types = self.mime_database.mimeTypesForFileName(self._items[index.row()].name)
+        #
+        # icon = QtGui.QIcon()
+        # for mime_type in mime_types:
+        #     icon = QtGui.QIcon.fromTheme(mime_type.iconName())
+        #     if icon.isNull():
+        #         break
+        #
+        # if icon.isNull():
+        #     return QtWidgets.QApplication.style().standardIcon(QtWidgets.QStyle.SP_FileIcon)
+        # else:
+        #     return icon
 
     def rowCount(self, parent: Union[QtCore.QModelIndex, QtCore.QPersistentModelIndex] = QtCore.QModelIndex) -> int:
         # def rowCount(self, index):

@@ -47,3 +47,9 @@ a = list(deep_glob(p, pattern='[!.]*', include_dotdirs=True))
 # a = list(deep_glob(p, pattern='*'))
 pp(a)
 print(f'List has {len(a)} entries')
+
+
+#%%
+import win32api
+
+win32api.ShellExecute(0, None, 'https://cnn.com', '', '', 1)

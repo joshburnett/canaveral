@@ -6,7 +6,7 @@ from pathlib import Path
 from PySide6 import QtCore, QtGui, QtWidgets, QtUiTools
 from PySide6.QtWidgets import (QApplication, QWidget, QPushButton, QMessageBox, QMainWindow, QLabel, QListWidget,
                                QLineEdit)
-
+import win32api
 
 from PySide6.QtCore import Qt
 
@@ -141,6 +141,7 @@ class CanaveralWindow(QMainWindow):
     def update_query(self, query_text):
         self.model.set_query(query_text)
         self.update_launch_list_size()
+
         if self.model.query is None or len(self.model.query.sorted_score_results) == 0:
             self.output.setText('')
             self.output_icon.clear()
@@ -158,16 +159,28 @@ class CanaveralWindow(QMainWindow):
             else:
                 QApplication.instance().quit()
 
-        if key in (Qt.Key_Down, Qt.Key_Up, Qt.Key_PageDown, Qt.Key_PageUp):
+        elif key in (Qt.Key_Enter, Qt.Key_Return):
+            logger.debug('Return/Enter key')
+            item = self.model.data(self.launch_list_view.currentIndex(), role=Qt.UserRole)
+            win32api.ShellExecute(0, None, str(item.full_path), '', '', 1)
+
+        elif key in (Qt.Key_Down, Qt.Key_Up, Qt.Key_PageDown, Qt.Key_PageUp):
             if self.launch_list_view.isVisible():
-                if not self.launch_list_view.isActiveWindow():
+                logger.debug(f'spot 1: self.launch_list_view.isActiveWindow(): '
+                             f'{self.launch_list_view.isActiveWindow()}')
+                logger.debug(f'self.launch_list_view.hasFocus(): {self.launch_list_view.hasFocus()}')
+
+                if not self.launch_list_view.hasFocus():
                     if self.launch_list_view.currentIndex().row() < 0 < self.model.num_results():
-                        self.launch_list_view.activateWindow()
+                        logger.debug('spot 2')
+                        self.launch_list_view.setFocus()
                         self.launch_list_view.setCurrentIndex(self.launch_list_view.model().index(0, 0))
                     else:
-                        self.launch_list_view.activateWindow()
+                        logger.debug('spot 3')
+                        self.launch_list_view.setFocus()
                         QApplication.sendEvent(self.launch_list_view, event)
             elif key in (Qt.Key_Down, Qt.Key_PageDown) and 0 < self.model.num_results():
+                logger.debug('spot 4')
                 self.launch_list_view.setCurrentIndex(self.launch_list_view.model().index(0, 0))
                 self.show_launch_list()
 
