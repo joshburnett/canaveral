@@ -1,0 +1,27 @@
+Features for me:
+? Trigger display of drop-down listview via a timer (not sure I actually want this behavior)
+x Make app a basic system tray app: no taskbar button
+x Make app hide when Esc pressed (not exit)
+x Show app via hotkey
+    - Always make app appear in center of screen (even if previously moved)
+- Add learning to scoring algorithm
+- Reindex on a timer
+    - Safely (only reindex when the app is not visible)
+- Use proper layout for main window (no more absolute coordinates)
+- Add location to list display
+- Triggered reindexing?
+- Underline matched letters
+- Draw background procedurally
+- Make background translucent
+- Configurable colors / font / layout
+    (https://www.alfredapp.com/help/appearance, https://www.alfredforum.com/forum/4-themes/)
+- Change size w/ window DPI
+
+Features later on:
+- Add configuration dialog:
+    - Catalog search paths
+        - Presets
+- Cross-platform compatibility
+- Make installable
+- Release to PyPI?
+- Can pipx be used to install something into the Start menu?

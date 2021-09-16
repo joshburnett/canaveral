@@ -13,12 +13,13 @@ class LaunchListModel(QtCore.QAbstractListModel):
     # query_set: QuerySet
     query: Optional[Query]
 
-    def __init__(self, *args, catalog: Catalog, query_set: QuerySet, **kwargs):
+    def __init__(self, *args, catalog: Catalog, query_set: QuerySet, max_launch_list_entries=10, **kwargs):
         super(LaunchListModel, self).__init__(*args, **kwargs)
         self.query_string = None
         self.query_set = query_set
         self.query = None
         self.catalog = catalog
+        self.max_launch_list_entries = max_launch_list_entries
 
         # self.mime_database = QtCore.QMimeDatabase()
         self.file_icon_provider = QtWidgets.QFileIconProvider()
@@ -67,8 +68,7 @@ class LaunchListModel(QtCore.QAbstractListModel):
         #     return icon
 
     def rowCount(self, parent: Union[QtCore.QModelIndex, QtCore.QPersistentModelIndex] = QtCore.QModelIndex) -> int:
-        # def rowCount(self, index):
-        return self.num_results()
+        return min(self.num_results(), self.max_launch_list_entries)
 
     def num_results(self):
         if self.query is None:
