@@ -1,18 +1,22 @@
 Features for me:
 ? Trigger display of drop-down listview via a timer (not sure I actually want this behavior)
+x Launch selected item
+    x Hide Canaveral when launching
+        - Can we show a progress indicator to indicate we're launching? Can we even determine when the launch has finished?
 x Make app a basic system tray app: no taskbar button
 x Make app hide when Esc pressed (not exit)
 x Show app via hotkey
-    - Always make app appear in center of screen (even if previously moved)
+    x Always make app appear in center of screen (even if previously moved)
 - Add learning to scoring algorithm
 - Reindex on a timer
     - Safely (only reindex when the app is not visible)
 - Use proper layout for main window (no more absolute coordinates)
+- Prevent text field from clipping vertically
+- Draw background procedurally
+- Make background translucent
 - Add location to list display
 - Triggered reindexing?
 - Underline matched letters
-- Draw background procedurally
-- Make background translucent
 - Configurable colors / font / layout
     (https://www.alfredapp.com/help/appearance, https://www.alfredforum.com/forum/4-themes/)
 - Change size w/ window DPI

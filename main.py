@@ -63,7 +63,6 @@ class CanaveralWindow(QMainWindow):
         self.update_launch_list_size()
         self.line_input.textEdited.connect(self.update_query)
         self.show_main_window_and_focus()
-        pass
 
     def setup_sys_tray_icon(self):
         self.tray = QSystemTrayIcon()
@@ -172,9 +171,14 @@ class CanaveralWindow(QMainWindow):
         #     self.output_icon.setPixmap(self.model.data(list_index, Qt.DecorationRole).pixmap(self.output_icon.size()))
 
     def hide_main_window(self):
+        self.launch_list_view.hide()
         self.hide()
 
     def show_main_window_and_focus(self):
+        frame_geometry = self.frameGeometry()
+        monitor_center = self.screen().availableGeometry().center()
+        frame_geometry.moveCenter(monitor_center)
+        self.move(frame_geometry.topLeft())
         self.show()
         # self.setFocus()
         self.line_input.setFocus()
@@ -220,6 +224,7 @@ class CanaveralWindow(QMainWindow):
         elif key in (Qt.Key_Enter, Qt.Key_Return):
             logger.debug('Return/Enter key')
             item = self.model.data(self.launch_list_view.currentIndex(), role=Qt.UserRole)
+            self.hide_main_window()
             win32api.ShellExecute(0, None, str(item.full_path), '', '', 1)
 
         elif key in (Qt.Key_Down, Qt.Key_Up, Qt.Key_PageDown, Qt.Key_PageUp):
@@ -237,10 +242,19 @@ class CanaveralWindow(QMainWindow):
                         logger.debug('spot 3')
                         self.launch_list_view.setFocus()
                         QApplication.sendEvent(self.launch_list_view, event)
+                elif self.launch_list_view.currentIndex().row() == 0 and key == Qt.Key_Up:
+                    logger.debug('spot 1.5')
+                    self.line_input.setFocus()
+
             elif key in (Qt.Key_Down, Qt.Key_PageDown) and 0 < self.model.num_results():
                 logger.debug('spot 4')
                 self.launch_list_view.setCurrentIndex(self.launch_list_view.model().index(0, 0))
                 self.show_launch_list()
+
+    def closeEvent(self, event):
+        logger.info('closeEvent')
+        event.accept()
+        sys.exit()
 
 
 def run():
