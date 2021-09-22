@@ -3,5 +3,8 @@ ipython
 pyside6
 pywin32
 loguru
-tabulate  # for pretty-printing collected data
-stringscore  # just for comparison purposes
+tabulate
+stringscore
+
+PyYAML
+prettyprinter

@@ -10,8 +10,6 @@ from PySide6.QtCore import QAbstractNativeEventFilter, QAbstractEventDispatcher
 
 import win32api
 import win32gui
-import win32ui
-import win32process
 
 from loguru import logger
 from qtkeybind import keybinder
@@ -49,7 +47,7 @@ class CanaveralWindow(QMainWindow):
 
         self.search_path_entries = search_path_entries
 
-        self.catalog = Catalog(self.search_path_entries)
+        self.catalog = Catalog(self.search_path_entries, launch_data_file=Path('launch_data.txt'))
         logger.debug(f'Catalog has {len(self.catalog.items)} entries')
         self.query_set = QuerySet(catalog=self.catalog)
         # self.query_set.create_query('doc')
@@ -225,7 +223,12 @@ class CanaveralWindow(QMainWindow):
             logger.debug('Return/Enter key')
             item = self.model.data(self.launch_list_view.currentIndex(), role=Qt.UserRole)
             self.hide_main_window()
+
+            # http://timgolden.me.uk/pywin32-docs/win32api__ShellExecute_meth.html
+            # win32api.ShellExecute(hwnd, op, file, params, dir, bShow)
             win32api.ShellExecute(0, None, str(item.full_path), '', '', 1)
+
+            self.catalog.update_launch_data(query_string=self.line_input.text(), launch_choice=item.full_path)
 
         elif key in (Qt.Key_Down, Qt.Key_Up, Qt.Key_PageDown, Qt.Key_PageUp):
             if self.launch_list_view.isVisible():

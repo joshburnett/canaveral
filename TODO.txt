@@ -7,14 +7,14 @@ x Make app a basic system tray app: no taskbar button
 x Make app hide when Esc pressed (not exit)
 x Show app via hotkey
     x Always make app appear in center of screen (even if previously moved)
-- Add learning to scoring algorithm
+x Add learning to scoring algorithm
 - Reindex on a timer
     - Safely (only reindex when the app is not visible)
 - Use proper layout for main window (no more absolute coordinates)
 - Prevent text field from clipping vertically
 - Draw background procedurally
 - Make background translucent
-- Add location to list display
+- Add location to list display (tooltip easiest first?)
 - Triggered reindexing?
 - Underline matched letters
 - Configurable colors / font / layout
