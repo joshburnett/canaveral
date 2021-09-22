@@ -282,5 +282,10 @@ def run():
 
 
 if __name__ == '__main__':
+    if Path(sys.executable).stem == 'pythonw':
+        sys.stdout = open('stdout.txt', 'w')
+        logger.remove()
+        logger.add(sys.stdout)
     run()
+    sys.stdout.close()
     sys.exit()

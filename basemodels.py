@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from fnmatch import fnmatch
@@ -10,12 +11,11 @@ from tabulate import tabulate
 from stringscore import liquidmetal
 import yaml
 
-import prettyprinter
-
 from typing import List, Optional, Dict, Tuple, Union
 
-
-prettyprinter.install_extras(include=('dataclasses',))
+if Path(sys.executable).stem != 'pythonw':
+    import prettyprinter
+    prettyprinter.install_extras(include=('dataclasses',))
 
 
 #%% Scoring methods & weights:
