@@ -256,6 +256,7 @@ class CanaveralWindow(QMainWindow):
 
     def closeEvent(self, event):
         logger.info('closeEvent')
+        keybinder.unregister_hotkey(self.winId(), "Ctrl+Alt+Space")
         event.accept()
         sys.exit()
 
@@ -278,7 +279,6 @@ def run():
     event_dispatcher.installNativeEventFilter(win_event_filter)
 
     app.exec()
-    keybinder.unregister_hotkey(main_window.winId(), "Ctrl+Alt+Space")
 
 
 if __name__ == '__main__':

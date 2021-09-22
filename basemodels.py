@@ -127,6 +127,9 @@ class Catalog:
         with open(self.launch_data_file, 'w') as file:
             yaml.dump(data, file, width=1000)
 
+        for query_text, query in self.queries.items():
+            query.update_match_score_if_relevant(launch_choice)
+
     def _create_items_list(self, search_paths: List[SearchPathEntry]) -> None:
         items = []
         self.queries = {}
@@ -156,6 +159,8 @@ class Catalog:
                 self.queries[query_text] = Query(catalog=self, parent=self.queries[query_text[:-1]], query=query_text)
             else:
                 self.queries[query_text] = Query(catalog=self, parent=self, query=query_text)
+        # else:
+        #     self.queries[query_text].update_query_scores()
 
         return self.queries[query_text]
 
@@ -164,7 +169,8 @@ class Catalog:
 class Query:
     query_text: str
     matches: List[Match] = field(repr=False)
-    sorted_score_results: Optional[Tuple[ScoreResult]] = field(default=None, repr=False)
+    score_results: Dict[Path: ScoreResult] = field(repr=False)
+    sorted_score_results: Tuple[ScoreResult] = field(default=None, repr=False)
 
     def __init__(self, catalog: Catalog, parent: Union[Catalog, Query], query: str):
         if type(parent) is Catalog:
@@ -192,29 +198,57 @@ class Query:
         else:
             raise TypeError('Query parent must be either a Catalog or another Query object')
 
-        score_results = {}
+        self.score_results = {}
+        self.sorted_score_results = tuple()
+        self.update_query_scores()
+
+    def update_query_scores(self) -> None:
+        self.score_results = {}
         for match in self.matches:
-            if match.catalog_item.full_path not in score_results or \
-                    match.score.result > score_results[match.catalog_item.full_path].total_score:
-                score_results[match.catalog_item.full_path] = ScoreResult(item=match.catalog_item,
-                                                                          match=match,
-                                                                          total_score=match.score.result)
+            if match.catalog_item.full_path not in self.score_results or \
+                    match.score.result > self.score_results[match.catalog_item.full_path].total_score:
+                self.score_results[match.catalog_item.full_path] = ScoreResult(item=match.catalog_item,
+                                                                               match=match,
+                                                                               total_score=match.score.result)
 
             # score_result = score_results.get(match.catalog_item.full_path,
             #                                  ScoreResult(item=match.catalog_item, total_score=0))
             # score_result.total_score += match.score.result
             # score_results[match.catalog_item.full_path] = score_result
 
-        self.sorted_score_results = tuple(sorted(score_results.values(),
+        self.sorted_score_results = tuple(sorted(self.score_results.values(),
                                                  key=lambda result: result.total_score, reverse=True))
 
-    def print_scores(self):
-        # scores = self.score_set
-        total_scores = [result.total_score for result in self.sorted_score_results]
-        catalog_indices = [result.catalog_index for result in self.sorted_score_results]
-        full_paths = [result.item.full_path for result in self.sorted_score_results]
-        item_names = [result.item.full_path.name for result in self.sorted_score_results]
-        liquidmetal_name_scores = [result.match.score.liquidmetal_name for result in self.sorted_score_results]
+    def update_match_score_if_relevant(self, item_path: Path) -> None:
+        if item_path in self.score_results:
+            for match in self.matches:
+                if match.catalog_item.full_path == item_path:
+                    if item_path in match.catalog.recent_launches:
+                        match.score.previously_launched = True
+                    else:
+                        match.score.previously_launched = False
+                    if match.catalog.launch_choices.get(self.query_text, None) == item_path:
+                        match.score.is_latest_match = True
+                    else:
+                        match.score.is_latest_match = False
+
+                    match.score.update_total()
+                    if match.score.result > self.score_results[match.catalog_item.full_path].total_score:
+                        self.score_results[match.catalog_item.full_path] = ScoreResult(item=match.catalog_item,
+                                                                                       match=match,
+                                                                                       total_score=match.score.result)
+            self.sorted_score_results = tuple(sorted(self.score_results.values(),
+                                                     key=lambda result: result.total_score, reverse=True))
+
+    def print_scores(self, limit: Optional[int] = 10) -> None:
+        if limit is None:
+            limit = len(self.sorted_score_results)
+
+        total_scores = [result.total_score for result in self.sorted_score_results[:limit]]
+        catalog_indices = [result.catalog_index for result in self.sorted_score_results[:limit]]
+        full_paths = [result.item.full_path for result in self.sorted_score_results[:limit]]
+        item_names = [result.item.full_path.name for result in self.sorted_score_results[:limit]]
+        liquidmetal_name_scores = [result.match.score.liquidmetal_name for result in self.sorted_score_results[:limit]]
         # liquidmetal_name_scores = [scores[catalog_index].liquidmetal_name
         #                            for catalog_index in catalog_indices]
 
@@ -228,18 +262,20 @@ class Query:
             'Full Path': full_paths,
         }, headers='keys'))
 
-    def print_detailed_scores(self):
-        # scores = self.score_set
-        total_scores = [result.total_score for result in self.sorted_score_results]
-        catalog_indices = [result.catalog_index for result in self.sorted_score_results]
-        item_names = [result.item.full_path.name for result in self.sorted_score_results]
-        full_paths = [result.item.full_path for result in self.sorted_score_results]
-        consec_name_scores = [result.match.score.consecutive_name for result in self.sorted_score_results]
-        initial_letter_scores = [result.match.score.initial_letters_name for result in self.sorted_score_results]
-        nonconsec_name_scores = [result.match.score.nonconsecutive_name for result in self.sorted_score_results]
-        liquidmetal_name_scores = [result.match.score.liquidmetal_name for result in self.sorted_score_results]
-        last_choice_scores = [result.match.score.is_latest_match for result in self.sorted_score_results]
-        recent_launch_scores = [result.match.score.previously_launched for result in self.sorted_score_results]
+    def print_detailed_scores(self, limit: Optional[int] = 10):
+        if limit is None:
+            limit = len(self.sorted_score_results)
+
+        total_scores = [result.total_score for result in self.sorted_score_results[:limit]]
+        catalog_indices = [result.catalog_index for result in self.sorted_score_results[:limit]]
+        item_names = [result.item.full_path.name for result in self.sorted_score_results[:limit]]
+        full_paths = [result.item.full_path for result in self.sorted_score_results[:limit]]
+        consec_name_scores = [result.match.score.consecutive_name for result in self.sorted_score_results[:limit]]
+        initial_letter_scores = [result.match.score.initial_letters_name for result in self.sorted_score_results[:limit]]
+        nonconsec_name_scores = [result.match.score.nonconsecutive_name for result in self.sorted_score_results[:limit]]
+        liquidmetal_name_scores = [result.match.score.liquidmetal_name for result in self.sorted_score_results[:limit]]
+        last_choice_scores = [result.match.score.is_latest_match for result in self.sorted_score_results[:limit]]
+        recent_launch_scores = [result.match.score.previously_launched for result in self.sorted_score_results[:limit]]
 
         # consec_name_scores = [scores[catalog_index].consecutive_name
         #                       for catalog_index in catalog_indices]
@@ -269,7 +305,7 @@ class Query:
 @dataclass
 class Match:
     catalog_item: CatalogItem
-    catalog: Catalog
+    catalog: Catalog = field(repr=False)
     match_chars: str = field(default_factory=str)
     match_indices: List[int] = field(default_factory=list)
     score: Optional[Score] = None
@@ -317,7 +353,7 @@ class Score:
 @dataclass
 class ScoreResult:
     item: CatalogItem
-    match: Match
+    match: Match = field(repr=False)
     total_score: float
     catalog_index: Optional[int] = None
 
