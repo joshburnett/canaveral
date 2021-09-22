@@ -212,6 +212,8 @@ class CanaveralWindow(QMainWindow):
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         key = event.key()
+        logger.debug(f'Key pressed: {event.key}')
+
         if key == Qt.Key_Escape:
             if self.launch_list_view.isVisible():
                 self.hide_launch_list()
@@ -221,6 +223,9 @@ class CanaveralWindow(QMainWindow):
 
         elif key in (Qt.Key_Enter, Qt.Key_Return):
             logger.debug('Return/Enter key')
+            if self.launch_list_view.currentIndex().row() == -1:
+                self.launch_list_view.setCurrentIndex(self.launch_list_view.model().index(0, 0))
+
             item = self.model.data(self.launch_list_view.currentIndex(), role=Qt.UserRole)
             self.hide_main_window()
 
@@ -253,6 +258,10 @@ class CanaveralWindow(QMainWindow):
                 logger.debug('spot 4')
                 self.launch_list_view.setCurrentIndex(self.launch_list_view.model().index(0, 0))
                 self.show_launch_list()
+        elif self.launch_list_view.hasFocus():
+            self.launch_list_view.setCurrentIndex(self.launch_list_view.model().index(-1, 0))
+            self.line_input.setFocus()
+            self.line_input.keyPressEvent(event)
 
     def closeEvent(self, event):
         logger.info('closeEvent')
