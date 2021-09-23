@@ -1,3 +1,6 @@
+# Some commands meant to be run interactively to explore the performance of
+# the cataloging process and ranking algorithm.
+
 from time import perf_counter
 from pathlib import Path
 import numpy as np
@@ -98,11 +101,6 @@ a = list(deep_glob(p, pattern='[!.]*', include_dotdirs=True))
 pp(a)
 print(f'List has {len(a)} entries')
 
-
-#%%
-import win32api
-
-win32api.ShellExecute(0, None, 'https://cnn.com', '', '', 1)
 
 
 #%%
