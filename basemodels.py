@@ -89,7 +89,7 @@ class Catalog:
     recent_launch_list_limit: int
     launch_data_file: Path
 
-    def __init__(self, search_paths: List[SearchPathEntry], launch_data_file: Path,
+    def __init__(self, search_paths: List[SearchPathEntry], launch_data_file: Optional[Path] = None,
                  recent_launch_list_limit: int = 50):
         self.items = []
         self.search_paths = search_paths
@@ -102,7 +102,7 @@ class Catalog:
         self.load_launch_data_from_file()
 
     def load_launch_data_from_file(self) -> None:
-        if self.launch_data_file.exists():
+        if self.launch_data_file is not None and self.launch_data_file.exists():
             with open(self.launch_data_file, 'r') as file:
                 launch_data = yaml.safe_load(file)
             self.launch_choices = {q: Path(pathstr) for q, pathstr in launch_data['launch choices'].items()}
