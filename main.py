@@ -70,7 +70,7 @@ class CanaveralWindow(QMainWindow):
     def setup_sys_tray_icon(self):
         self.tray = QSystemTrayIcon()
         if self.tray.isSystemTrayAvailable():
-            icon = QtGui.QIcon('resources/search_icon.png')
+            icon = QtGui.QIcon('resources/rocket_with_shadow.png')
             menu = QMenu()
             setting_action = menu.addAction('Settings...')
             setting_action.triggered.connect(self.setting)
@@ -208,7 +208,7 @@ class CanaveralWindow(QMainWindow):
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         key = event.key()
-        logger.debug(f'Key pressed: {event.key}')
+        # logger.debug(f'Key pressed: {event.key()}')
 
         if key == Qt.Key_Escape:
             if self.launch_list_view.isVisible():
@@ -227,6 +227,7 @@ class CanaveralWindow(QMainWindow):
 
             # http://timgolden.me.uk/pywin32-docs/win32api__ShellExecute_meth.html
             # win32api.ShellExecute(hwnd, op, file, params, dir, bShow)
+            logger.debug(f'Executing: {item.full_path}')
             win32api.ShellExecute(0, None, str(item.full_path), '', '', 1)
 
             self.catalog.update_launch_data(query_string=self.line_input.text(), launch_choice=item.full_path)
