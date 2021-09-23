@@ -38,7 +38,10 @@ class LaunchListModel(QtCore.QAbstractListModel):
         score_result = self.query.sorted_score_results[index.row()]
 
         if role == Qt.DisplayRole:
-            return score_result.item.name
+            if score_result.item.full_path.suffix == '.lnk':
+                return score_result.item.full_path.stem
+            else:
+                return score_result.item.name
 
         elif role == Qt.DecorationRole:
             info = QtCore.QFileInfo(str(score_result.item.full_path))
