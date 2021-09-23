@@ -5,6 +5,6 @@ pywin32
 loguru
 tabulate
 stringscore
-
+winpath
 PyYAML
 prettyprinter
