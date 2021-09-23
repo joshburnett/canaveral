@@ -48,7 +48,6 @@ class CanaveralWindow(QMainWindow):
         self.search_path_entries = search_path_entries
 
         self.catalog = Catalog(self.search_path_entries, launch_data_file=Path('launch_data.txt'))
-        logger.debug(f'Catalog has {len(self.catalog.items)} entries')
         self.query_set = QuerySet(catalog=self.catalog)
         # self.query_set.create_query('doc')
 
@@ -60,6 +59,12 @@ class CanaveralWindow(QMainWindow):
         self.launch_list_view.setModel(self.model)
         self.update_launch_list_size()
         self.line_input.textEdited.connect(self.update_query)
+
+        self.item_refresh_timer = QtCore.QTimer(self)
+        self.item_refresh_timer.setInterval(5*60*1000)  # 5 minutes
+        self.item_refresh_timer.timeout.connect(self.catalog.refresh_items_list)
+        self.item_refresh_timer.start()
+
         self.show_main_window_and_focus()
 
     def setup_sys_tray_icon(self):
@@ -159,15 +164,6 @@ class CanaveralWindow(QMainWindow):
         self.model.set_query(query_text)
         self.update_launch_list_size()
 
-        # if self.model.query is None or len(self.model.query.sorted_score_results) == 0:
-        #     self.output.setText('')
-        #     self.output_icon.clear()
-        # else:
-        #     list_index = self.launch_list_view.model().index(0, 0)
-        #     # top_result = self.model.query.sorted_score_results[0]
-        #     self.output.setText(self.model.data(list_index, Qt.DisplayRole))
-        #     self.output_icon.setPixmap(self.model.data(list_index, Qt.DecorationRole).pixmap(self.output_icon.size()))
-
     def hide_main_window(self):
         self.launch_list_view.hide()
         self.hide()
@@ -262,6 +258,11 @@ class CanaveralWindow(QMainWindow):
             self.launch_list_view.setCurrentIndex(self.launch_list_view.model().index(-1, 0))
             self.line_input.setFocus()
             self.line_input.keyPressEvent(event)
+
+    def changeEvent(self, event):
+        if event.type() == QtCore.QEvent.ActivationChange and not self.isActiveWindow():
+            self.hide_main_window()
+        super().changeEvent(event)
 
     def closeEvent(self, event):
         logger.info('closeEvent')

@@ -10,6 +10,7 @@ import numpy as np
 from tabulate import tabulate
 from stringscore import liquidmetal
 import yaml
+from loguru import logger
 
 from typing import List, Optional, Dict, Tuple, Union
 
@@ -93,7 +94,7 @@ class Catalog:
                  recent_launch_list_limit: int = 50):
         self.items = []
         self.search_paths = search_paths
-        self._create_items_list(search_paths)
+        self.refresh_items_list()
         self.queries = {}
         self.recent_launch_list_limit = recent_launch_list_limit
         self.recent_launches = []
@@ -130,12 +131,12 @@ class Catalog:
         for query_text, query in self.queries.items():
             query.update_match_score_if_relevant(launch_choice)
 
-    def _create_items_list(self, search_paths: List[SearchPathEntry]) -> None:
+    def refresh_items_list(self) -> None:
+        logger.debug('Refreshing catalog items list')
         items = []
         self.queries = {}
-        self.search_paths = search_paths
 
-        for search_path in search_paths:
+        for search_path in self.search_paths:
             expanded_path = search_path.path.expanduser()
             if search_path.include_root:
                 items.append(CatalogItem(expanded_path))
@@ -151,6 +152,7 @@ class Catalog:
                                                          depth=search_path.search_depth, pattern=pattern)]
 
         self.items = list(set(items))
+        logger.debug(f'Catalog has {len(self.items)} entries')
 
     def query(self, query_text: str):
         if query_text not in self.queries:
