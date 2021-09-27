@@ -70,7 +70,7 @@ class CanaveralWindow(QMainWindow):
     def setup_sys_tray_icon(self):
         self.tray = QSystemTrayIcon()
         if self.tray.isSystemTrayAvailable():
-            icon = QtGui.QIcon('resources/rocket_with_shadow.png')
+            icon = QtGui.QIcon('resources/rocket_with_shadow_blue.png')
             menu = QMenu()
             setting_action = menu.addAction('Settings...')
             setting_action.triggered.connect(self.setting)
@@ -176,6 +176,7 @@ class CanaveralWindow(QMainWindow):
         self.show()
         # self.setFocus()
         self.line_input.setFocus()
+        self.line_input.selectAll()
         win32gui.SetForegroundWindow(self.winId())
 
     def show_launch_list(self):
