@@ -79,8 +79,6 @@ class CanaveralWindow(QMainWindow):
         self.item_refresh_timer.timeout.connect(self.catalog.refresh_items_list)
         self.item_refresh_timer.start()
 
-        self.show_main_window_and_focus()
-
     def setup_sys_tray_icon(self):
         self.tray = QSystemTrayIcon()
         if self.tray.isSystemTrayAvailable():
@@ -291,6 +289,7 @@ def run():
     if Path(sys.executable).stem == 'pythonw':
         Path(DIRS.user_log_dir).mkdir(parents=True, exist_ok=True)
         sys.stdout = open(Path(DIRS.user_log_dir) / 'canaveral.log', 'w')
+        sys.stderr = sys.stdout
         logger.remove()
         logger.add(sys.stdout)
 
