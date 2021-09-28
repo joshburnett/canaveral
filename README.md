@@ -1,7 +1,7 @@
 Canaveral: Quickly find and open applications and files
 ================================================================
 
-![Canaveral logo](https://raw.githubusercontent.com/joshburnett/canaveral/main/resources/rocket_with_shadow_blue_256px.png "Canaveral")
+![Canaveral logo](https://raw.githubusercontent.com/joshburnett/canaveral/main/canaveral/resources/rocket_with_shadow_blue_256px.png "Canaveral")
 
 * Blazing fast search: Indexes folders you specify, cataloging files and subdirectories matching your specified filters
 * Globally available via a user-configurable hotkey
