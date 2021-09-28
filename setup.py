@@ -29,6 +29,7 @@ setup(
     # packages=['canaveral'] + find_packages('canaveral'),
     packages=['canaveral', 'canaveral.qtkeybind', 'canaveral.qtkeybind.win', 'canaveral.qtkeybind.x11'],
     package_data={'canaveral': ['resources/*.png', 'resources/*.ico']},
+    include_package_data=True,
     install_requires=REQUIRED,
     entry_points={
         'console_scripts': ['canaveral-console=canaveral.main:run'],

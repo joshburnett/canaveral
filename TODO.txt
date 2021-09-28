@@ -2,7 +2,6 @@ Features for me:
 ? Trigger display of drop-down listview via a timer (not sure I actually want this behavior)
 x Launch selected item
     x Hide Canaveral when launching
-        - Can we show a progress indicator to indicate we're launching? Can we even determine when the launch has finished?
 x Make app a basic system tray app: no taskbar button
 x Make app hide when Esc pressed (not exit)
 x Show app via hotkey
@@ -10,11 +9,11 @@ x Show app via hotkey
 x Add learning to scoring algorithm
 x Reindex on a timer
     - Safely (only reindex when the app is not visible)
-- Make installable
+x Make installable
     x Default entry point uses pythonw.exe
     x Optional entry point for running w/ python.exe
-- Release to PyPI?
-- Use pipx to install it
+x Release to PyPI
+x Use pipx to install it
 
 - Use proper layout for main window (no more absolute coordinates)
 - Prevent text field from clipping vertically

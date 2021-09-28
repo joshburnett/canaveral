@@ -5,7 +5,10 @@ from PySide6.QtCore import Qt
 
 from loguru import logger
 
-from canaveral.basemodels import Catalog, QuerySet, Query
+try:
+    from canaveral.basemodels import Catalog, QuerySet, Query
+except ImportError:
+    from .basemodels import Catalog, QuerySet, Query
 
 
 class LaunchListModel(QtCore.QAbstractListModel):

@@ -14,11 +14,18 @@ import win32gui
 from loguru import logger
 from appdirs import AppDirs
 
-from canaveral.qtkeybind import keybinder
-
-from canaveral.basemodels import SearchPathEntry, Catalog, QuerySet
-from canaveral.qtmodels import LaunchListModel
-from canaveral.widgets import CharLineEdit, CharListWidget
+# Try different ways of importing, so we can run this as an application installed via pip/pipx,
+# and also just from the source directory.
+try:
+    from canaveral.qtkeybind import keybinder
+    from canaveral.basemodels import SearchPathEntry, Catalog, QuerySet
+    from canaveral.qtmodels import LaunchListModel
+    from canaveral.widgets import CharLineEdit, CharListWidget
+except ImportError:
+    from .qtkeybind import keybinder
+    from .basemodels import SearchPathEntry, Catalog, QuerySet
+    from .qtmodels import LaunchListModel
+    from .widgets import CharLineEdit, CharListWidget
 
 
 class WinEventFilter(QAbstractNativeEventFilter):
@@ -282,7 +289,7 @@ class CanaveralWindow(QMainWindow):
 
 def run():
     if Path(sys.executable).stem == 'pythonw':
-        Path(DIRS.user_log_dir).mkdir(parents=True)
+        Path(DIRS.user_log_dir).mkdir(parents=True, exist_ok=True)
         sys.stdout = open(Path(DIRS.user_log_dir) / 'canaveral.log', 'w')
         logger.remove()
         logger.add(sys.stdout)

@@ -3,3 +3,6 @@
 /canaveral/launch_data.txt
 /canaveral/paths.py
 /stdout.txt
+/canaveral.egg-info/
+/dist/
+/build/
