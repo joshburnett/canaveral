@@ -63,6 +63,6 @@ python main.py
 
 Releases
 --------
-### 0.0.1: 2021-09-xx
+### 0.1.0: 2021-09-28
 
 - First public release
