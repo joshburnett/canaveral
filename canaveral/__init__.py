@@ -5,5 +5,5 @@
 # \____/ \__,_//_/ /_/ \__,_/  |___/ \___//_/    \__,_//_/
 #
 
-__version__ = '0.0.1a2'
+__version__ = '0.1.0'
 __version_info__ = tuple(int(i) if i.isdigit() else i for i in __version__.split('.'))
