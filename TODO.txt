@@ -11,8 +11,9 @@ x Add learning to scoring algorithm
 x Reindex on a timer
     - Safely (only reindex when the app is not visible)
 - Make installable
-    - Default entry point uses pythonw.exe
-    - Optional entry point for running w/ python.exe
+    x Default entry point uses pythonw.exe
+    x Optional entry point for running w/ python.exe
+- Release to PyPI?
 - Use pipx to install it
 
 - Use proper layout for main window (no more absolute coordinates)
@@ -31,5 +32,4 @@ Features later on:
     - Catalog search paths
         - Presets
 - Cross-platform compatibility
-- Release to PyPI?
 - Can pipx be used to install something into the Start menu?

@@ -3,7 +3,7 @@
 
 from pathlib import Path
 import winpath
-from main import SearchPathEntry
+from canaveral.basemodels import SearchPathEntry
 
 search_path_entries = [
     # Office-type documents and directories in the user's Documents directory

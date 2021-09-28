@@ -1,5 +1,5 @@
 /.venv/
 /.idea/
-/launch_data.txt
-/paths.py
+/canaveral/launch_data.txt
+/canaveral/paths.py
 /stdout.txt

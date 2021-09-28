@@ -8,3 +8,6 @@ prettyprinter
 appdirs
 tabulate
 numpy
+ipython
+wheel
+twine

@@ -21,7 +21,7 @@ from paths import search_path_entries
 
 t1 = perf_counter()
 
-c = Catalog(search_path_entries, launch_data_file=Path('launch_data.txt'))
+c = Catalog(search_path_entries, launch_data_file=Path('canaveral/launch_data.txt'))
 print(f'Catalog has {len(c.items)} entries')
 # c.items
 

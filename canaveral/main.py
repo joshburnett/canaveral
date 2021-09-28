@@ -12,11 +12,13 @@ import win32api
 import win32gui
 
 from loguru import logger
-from qtkeybind import keybinder
+from appdirs import AppDirs
 
-from basemodels import SearchPathEntry, Catalog, QuerySet
-from qtmodels import LaunchListModel
-from widgets import CharLineEdit, CharListWidget
+from canaveral.qtkeybind import keybinder
+
+from canaveral.basemodels import SearchPathEntry, Catalog, QuerySet
+from canaveral.qtmodels import LaunchListModel
+from canaveral.widgets import CharLineEdit, CharListWidget
 
 
 class WinEventFilter(QAbstractNativeEventFilter):
@@ -27,6 +29,11 @@ class WinEventFilter(QAbstractNativeEventFilter):
     def nativeEventFilter(self, eventType, message):
         ret = self.keybinder.handler(eventType, message)
         return ret, 0
+
+
+# Helper object for defining locations for config & log files
+DIRS = AppDirs('Canaveral', appauthor='')
+sys.path.append(DIRS.user_data_dir)  # so we can load the paths file
 
 
 class CanaveralWindow(QMainWindow):
@@ -40,14 +47,14 @@ class CanaveralWindow(QMainWindow):
             from paths import search_path_entries
             logger.debug('Loaded search path entries from paths.py.')
         except ImportError:
-            logger.debug('No paths.py present, using default search path entries.')
-            search_path_entries = [
-                SearchPathEntry(path=Path(r'~').expanduser())
-            ]
+            logger.debug('No paths.py present, creating from paths-example.py.')
+            import shutil
+            shutil.copy(Path(__file__).parent / 'paths-example.py', Path(DIRS.user_data_dir) / 'paths.py')
+            from paths import search_path_entries
 
         self.search_path_entries = search_path_entries
 
-        self.catalog = Catalog(self.search_path_entries, launch_data_file=Path('launch_data.txt'))
+        self.catalog = Catalog(self.search_path_entries, launch_data_file=Path(DIRS.user_data_dir) / 'launch_data.txt')
         self.query_set = QuerySet(catalog=self.catalog)
         # self.query_set.create_query('doc')
 
@@ -70,7 +77,7 @@ class CanaveralWindow(QMainWindow):
     def setup_sys_tray_icon(self):
         self.tray = QSystemTrayIcon()
         if self.tray.isSystemTrayAvailable():
-            icon = QtGui.QIcon('resources/rocket_with_shadow_blue.png')
+            icon = QtGui.QIcon(str(Path(__file__).parent / 'resources/rocket_with_shadow_blue.png'))
             menu = QMenu()
             setting_action = menu.addAction('Settings...')
             setting_action.triggered.connect(self.setting)
@@ -100,7 +107,7 @@ class CanaveralWindow(QMainWindow):
         # self.setFocusPolicy(Qt.ClickFocus)
 
         self.background = QLabel(parent=self)
-        bg_pixmap = QtGui.QPixmap('resources/light_background_2x.png')
+        bg_pixmap = QtGui.QPixmap(str(Path(__file__).parent / 'resources/light_background_2x.png'))
         bg_pixmap.setDevicePixelRatio(2)
         # bg_pixmap = QtGui.QPixmap(':/styles/frame')
         self.background_size_scaled = bg_pixmap.size() / bg_pixmap.devicePixelRatio()
@@ -110,7 +117,7 @@ class CanaveralWindow(QMainWindow):
         self.resize(self.background_size_scaled)
 
         self.search_icon = QLabel(parent=self)
-        search_pixmap = QtGui.QPixmap('resources/search_icon.png')
+        search_pixmap = QtGui.QPixmap(str(Path(__file__).parent / 'resources/search_icon.png'))
         search_pixmap.setDevicePixelRatio(2)
         # bg_pixmap = QtGui.QPixmap(':/styles/frame')
         self.search_icon.setPixmap(search_pixmap)
@@ -274,6 +281,12 @@ class CanaveralWindow(QMainWindow):
 
 
 def run():
+    if Path(sys.executable).stem == 'pythonw':
+        Path(DIRS.user_log_dir).mkdir(parents=True)
+        sys.stdout = open(Path(DIRS.user_log_dir) / 'canaveral.log', 'w')
+        logger.remove()
+        logger.add(sys.stdout)
+
     logger.debug('Starting.')
 
     app = QApplication([])
@@ -292,12 +305,9 @@ def run():
 
     app.exec()
 
-
-if __name__ == '__main__':
-    if Path(sys.executable).stem == 'pythonw':
-        sys.stdout = open('stdout.txt', 'w')
-        logger.remove()
-        logger.add(sys.stdout)
-    run()
     sys.stdout.close()
     sys.exit()
+
+
+if __name__ == '__main__':
+    run()
