@@ -6,6 +6,7 @@ from pathlib import Path
 from fnmatch import fnmatch
 from copy import deepcopy
 
+import winpath
 import numpy as np
 from tabulate import tabulate
 from stringscore import liquidmetal
@@ -70,13 +71,20 @@ class CatalogItem:
 
 @dataclass
 class SearchPathEntry:
-    path: Union[Path, str]
+    path: str  # can be a shortcut abbreviation or a regular string
+    full_path: Path = None  # no need to specify, as it gets created from path
     patterns: List[str] = field(default_factory=lambda: ['*'])
     include_root: bool = False
     search_depth: int = 0
 
     def __post_init__(self):
-        self.path = Path(self.path)
+        match self.path:
+            case '$user_docs':
+                self.full_path = Path(winpath.get_my_documents())
+            case '$user_start_menu':
+                self.full_path = winpath.get_programs()
+            case _:
+                self.full_path = Path(self.path).expanduser()
 
 
 @dataclass
@@ -137,7 +145,7 @@ class Catalog:
         self.queries = {}
 
         for search_path in self.search_paths:
-            expanded_path = search_path.path.expanduser()
+            expanded_path = search_path.full_path.expanduser()
             if search_path.include_root:
                 items.append(CatalogItem(expanded_path))
             for pattern in search_path.patterns:
