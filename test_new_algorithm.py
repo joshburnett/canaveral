@@ -4,12 +4,21 @@
 from time import perf_counter
 from pathlib import Path
 import numpy as np
+from appdirs import AppDirs
 
-t0 = perf_counter()
-from basemodels import Catalog
+DIRS = AppDirs('Canaveral', appauthor='')
+
+t = perf_counter()
+from canaveral.basemodels import Catalog, SearchPathEntry
 from loguru import logger
 
-from paths import search_path_entries
+from canaveral.mainwindow import load_search_paths
+
+# %load_ext autoreload
+# %autoreload 2
+
+#%%
+t0 = perf_counter()
 
 #%
 # search_path_entries = [
@@ -19,6 +28,20 @@ from paths import search_path_entries
 #     # SearchPathEntry(path='~/Downloads', include_root=True),
 # ]
 
+search_path_entries = [
+    SearchPathEntry(path='$user_docs', search_depth=10,
+                    patterns=['.dir', '.doc', '.docx', '.xls', '.xlsx', '.ppt',
+                              '.pptx', '.pdf', '.txt', '.vsd', '.vsdx']),
+    # SearchPathEntry(path=r'C:\Users\jburnett1\iCloudDrive', search_depth=10,
+    #                 patterns=['.dir', '.doc', '.docx', '.xls', '.xlsx', '.ppt',
+    #                           '.pptx', '.pdf', '.txt', '.vsd', '.vsdx']),
+    SearchPathEntry(path='~', search_depth=0, patterns=['.dir']),
+    SearchPathEntry(path='$user_start_menu', search_depth=3, patterns=['.lnk']),
+    SearchPathEntry(path=r'C:\ProgramData\Microsoft\Windows\Start Menu\Programs', search_depth=3, patterns=['.lnk']),
+]
+
+# search_path_entries = load_search_paths(Path(DIRS.user_data_dir) / 'paths.toml')
+
 t1 = perf_counter()
 
 c = Catalog(search_path_entries, launch_data_file=Path('canaveral/launch_data.txt'))
@@ -27,57 +50,87 @@ print(f'Catalog has {len(c.items)} entries')
 
 t2 = perf_counter()
 
-print(f'Imports: {t1-t0:.2f} sec')
+print(f'Imports: {t0-t:.2f} sec')
+print(f'Loading search entries: {t1-t0:.2f} sec')
 print(f'Catalog scanning: {t2-t1:.2f} sec')
 
 
 #%%
+search_path_entries = [
+    SearchPathEntry(path='$user_docs', search_depth=10,
+                    patterns=['.dir', '.doc', '.docx', '.xls', '.xlsx', '.ppt',
+                              '.pptx', '.pdf', '.txt', '.vsd', '.vsdx']),
+    # SearchPathEntry(path=r'C:\Users\jburnett1\iCloudDrive', search_depth=10,
+    #                 patterns=['.dir', '.doc', '.docx', '.xls', '.xlsx', '.ppt',
+    #                           '.pptx', '.pdf', '.txt', '.vsd', '.vsdx']),
+    SearchPathEntry(path='~', search_depth=0, patterns=['.dir']),
+    SearchPathEntry(path='$user_start_menu', search_depth=3, patterns=['.lnk']),
+    SearchPathEntry(path=r'C:\ProgramData\Microsoft\Windows\Start Menu\Programs', search_depth=3, patterns=['.lnk']),
+]
+
 times = [perf_counter()]
 c = Catalog(search_path_entries)
 times.append(perf_counter())
 
 logger.debug(f'Catalog has {len(c.items)} entries')
 
-q = c.query('l')
-times.append(perf_counter())
-q = c.query('lo')
-times.append(perf_counter())
-q = c.query('lov')
-times.append(perf_counter())
-q = c.query('love')
-times.append(perf_counter())
+queries = []
+
+q_text = 'python'
+for n in range(len(q_text)):
+    queries.append(c.query(q_text[:n+1]))
+    times.append(perf_counter())
 
 etimes = [y-x for x, y in zip(times[:-1], times[1:])]
 
+print(etimes)
+
+for q in queries:
+    q.print_scores()
+
+
 #%%
+search_path_entries = [
+    SearchPathEntry(path='$user_docs', search_depth=10,
+                    patterns=['.dir', '.doc', '.docx', '.xls', '.xlsx', '.ppt',
+                              '.pptx', '.pdf', '.txt', '.vsd', '.vsdx']),
+    # SearchPathEntry(path=r'C:\Users\jburnett1\iCloudDrive', search_depth=10,
+    #                 patterns=['.dir', '.doc', '.docx', '.xls', '.xlsx', '.ppt',
+    #                           '.pptx', '.pdf', '.txt', '.vsd', '.vsdx']),
+    SearchPathEntry(path='~', search_depth=0, patterns=['.dir']),
+    SearchPathEntry(path='$user_start_menu', search_depth=3, patterns=['.lnk']),
+    SearchPathEntry(path=r'C:\ProgramData\Microsoft\Windows\Start Menu\Programs', search_depth=3, patterns=['.lnk']),
+]
+
 time_descriptions = []
 times = [perf_counter()]
+queries = []
 
 c = Catalog(search_path_entries)
 times.append(perf_counter())
 time_descriptions.append('Create catalog')
 
-q = c.query('s')
+queries.append(c.query('s'))
 times.append(perf_counter())
 time_descriptions.append("Query 's'")
 
-q = c.query('sh')
+queries.append(c.query('sh'))
 times.append(perf_counter())
 time_descriptions.append("Query 'sh'")
 
-q = c.query('sho')
+queries.append(c.query('sho'))
 times.append(perf_counter())
 time_descriptions.append("Query 'sho'")
 
-q = c.query('shop')
+queries.append(c.query('shop'))
 times.append(perf_counter())
 time_descriptions.append("Query 'shop'")
 
-q = c.query('shot')
+queries.append(c.query('shot'))
 times.append(perf_counter())
 time_descriptions.append("Query 'shot'")
 
-q = c.query('shoot')
+queries.append(c.query('shoot'))
 times.append(perf_counter())
 time_descriptions.append("Query 'shoot'")
 
@@ -89,9 +142,15 @@ print('\n\n')
 for delta, description in zip(time_deltas, time_descriptions):
     print(f'Delta: {delta*1000:0.2f} ms\tItem: {description}')
 
+q = queries[-2]
+# q.print_scores()
+q.print_detailed_scores()
+
+q.matches[0]
+
 #%%
 from pathlib import Path
-from basemodels import deep_glob
+from canaveral.basemodels import deep_glob
 from pprint import pp
 p = Path('/Users/josh')
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from fnmatch import fnmatch
@@ -12,8 +13,6 @@ from tabulate import tabulate
 from stringscore import liquidmetal
 import yaml
 from loguru import logger
-
-from typing import List, Optional, Dict, Tuple, Union
 
 if Path(sys.executable).stem != 'pythonw':
     import prettyprinter
@@ -30,8 +29,8 @@ if Path(sys.executable).stem != 'pythonw':
 # - Non-consecutive matching letters in path
 
 LATEST_MATCH_WEIGHT = 5
-PREVIOUSLY_LAUNCHED_WEIGHT = 2
-CONSEC_NAME_WEIGHT = 1.2
+PREVIOUSLY_LAUNCHED_WEIGHT = 2.5
+CONSEC_NAME_WEIGHT = 2
 INITIAL_LETTERS_NAME_WEIGHT = 1
 NONCONSEC_NAME_WEIGHT = 0.5
 NONCONSEC_PATH_WEIGHT = 0.25
@@ -39,6 +38,21 @@ WORD_SEPARATORS = ' \t_-'
 
 
 #%%
+def deep_glob2(path: Path, depth: int = 0, pattern: str = '*', include_dotdirs=False):
+    # Negative values for depth will descend into all subdirectories
+    try:
+        for child in os.scandir(path):
+            if child.is_dir():
+                if include_dotdirs or fnmatch(child.name, '[!.]*'):
+                    yield child
+                    if depth != 0:
+                        yield from deep_glob2(path=child.path, depth=depth - 1, pattern=pattern)
+            elif fnmatch(child.name, pattern):
+                yield child
+    except PermissionError:
+        pass
+
+
 def deep_glob(path: Path, depth: int = 0, pattern: str = '*', include_dotdirs=False):
     # Negative values for depth will descend into all subdirectories
     try:
@@ -60,9 +74,28 @@ def findall(string, char, start=0):
 
 @dataclass(frozen=True)  # needs to be frozen so we can hash it to create a set of these
 class CatalogItem:
-    full_path: Path
-    name: Optional[str] = field(repr=False, default=None)
-    lower_name: Optional[str] = field(repr=False, default=None)
+    full_path: Path | os.DirEntry
+    name: str | None = field(repr=False, default=None)
+    lower_name: str | None = field(repr=False, default=None)
+
+    def __eq__(self, other):
+        # if type(other) is type(self):
+        if isinstance(other, CatalogItem):
+            if isinstance(self.full_path, Path):
+                return self.full_path == other.full_path
+            else:
+                return self.full_path.path == other.full_path.path
+        else:
+            return False
+
+    def __hash__(self):
+        if isinstance(self.full_path, Path):
+            return hash(self.full_path)
+        else:
+            return hash(self.full_path.path)
+
+    def __repr__(self):
+        return f"CatalogItem(full_path='{self.full_path}')"
 
     def __post_init__(self):
         object.__setattr__(self, 'name', self.full_path.name)
@@ -73,7 +106,7 @@ class CatalogItem:
 class SearchPathEntry:
     path: str  # can be a shortcut abbreviation or a regular string
     full_path: Path = None  # no need to specify, as it gets created from path
-    patterns: List[str] = field(default_factory=lambda: ['*'])
+    patterns: list[str] = field(default_factory=lambda: ['*'])
     include_root: bool = False
     search_depth: int = 0
 
@@ -82,26 +115,27 @@ class SearchPathEntry:
             case '$user_docs':
                 self.full_path = Path(winpath.get_my_documents())
             case '$user_start_menu':
-                self.full_path = winpath.get_programs()
+                self.full_path = Path(winpath.get_programs())
             case _:
                 self.full_path = Path(self.path).expanduser()
 
 
-@dataclass
+# @dataclass
 class Catalog:
-    items: List[CatalogItem]
+    items: list[CatalogItem]
     queries: dict[str, Query]
-    search_paths: List[SearchPathEntry]
+    search_paths: list[SearchPathEntry]
     launch_choices: dict[str, Path]  # dict where keys are the abbreviations that were typed,
                                      # and the values are the resulting paths that were launched
-    recent_launches: List[Path]  # list of all the recent items that were launched, ordered recent to oldest
+    recent_launches: list[Path]  # list of all the recent items that were launched, ordered recent to oldest
     recent_launch_list_limit: int
     launch_data_file: Path
 
-    def __init__(self, search_paths: List[SearchPathEntry], launch_data_file: Optional[Path] = None,
-                 recent_launch_list_limit: int = 50):
+    def __init__(self, search_paths: list[SearchPathEntry], launch_data_file: Path | None = None,
+                 recent_launch_list_limit: int = 50, glob_algorithm=deep_glob):
         self.items = []
         self.search_paths = search_paths
+        self.glob_algorithm = glob_algorithm
         self.refresh_items_list()
         self.queries = {}
         self.recent_launch_list_limit = recent_launch_list_limit
@@ -109,6 +143,10 @@ class Catalog:
         self.launch_choices = {}
         self.launch_data_file = launch_data_file
         self.load_launch_data_from_file()
+
+    def __repr__(self):
+        return f'Catalog: {len(self.items)} items, {len(self.search_paths)} search paths, ' \
+               f'{len(self.queries)} queries'
 
     def load_launch_data_from_file(self) -> None:
         if self.launch_data_file is not None and self.launch_data_file.exists():
@@ -151,18 +189,18 @@ class Catalog:
             for pattern in search_path.patterns:
                 if pattern == '.dir':
                     items += [CatalogItem(item_path)
-                              for item_path in deep_glob(expanded_path,
-                                                         depth=search_path.search_depth, pattern='[!.]*')
+                              for item_path in self.glob_algorithm(expanded_path,
+                                                                   depth=search_path.search_depth, pattern='[!.]*')
                               if item_path.is_dir()]
                 else:
                     items += [CatalogItem(item_path)
-                              for item_path in deep_glob(expanded_path,
-                                                         depth=search_path.search_depth, pattern=pattern)]
+                              for item_path in self.glob_algorithm(expanded_path,
+                                                                   depth=search_path.search_depth, pattern=pattern)]
 
         self.items = list(set(items))
         logger.debug(f'Catalog has {len(self.items)} entries')
 
-    def query(self, query_text: str):
+    def query(self, query_text: str) -> Query:
         if query_text not in self.queries:
             if len(query_text) > 1:
                 self.query(query_text[:-1])
@@ -178,11 +216,11 @@ class Catalog:
 @dataclass
 class Query:
     query_text: str
-    matches: List[Match] = field(repr=False)
-    score_results: Dict[Path: ScoreResult] = field(repr=False)
-    sorted_score_results: Tuple[ScoreResult] = field(default=None, repr=False)
+    matches: list[Match] = field(repr=False)
+    score_results: dict[Path: ScoreResult] = field(repr=False)
+    sorted_score_results: tuple[ScoreResult] = field(default=None, repr=False)
 
-    def __init__(self, catalog: Catalog, parent: Union[Catalog, Query], query: str):
+    def __init__(self, catalog: Catalog, parent: Catalog | Query, query: str):
         if type(parent) is Catalog:
             self.query_text = query[0]
             self.matches = [Match(catalog_item=item,
@@ -211,6 +249,9 @@ class Query:
         self.score_results = {}
         self.sorted_score_results = tuple()
         self.update_query_scores()
+
+    def __repr__(self):
+        return f"Query(query_text='{self.query_text}') : {len(self.matches)} matches"
 
     def update_query_scores(self) -> None:
         self.score_results = {}
@@ -250,7 +291,7 @@ class Query:
             self.sorted_score_results = tuple(sorted(self.score_results.values(),
                                                      key=lambda result: result.total_score, reverse=True))
 
-    def print_scores(self, limit: Optional[int] = 10) -> None:
+    def print_scores(self, limit: int | None = 10) -> None:
         if limit is None:
             limit = len(self.sorted_score_results)
 
@@ -272,7 +313,7 @@ class Query:
             'Full Path': full_paths,
         }, headers='keys'))
 
-    def print_detailed_scores(self, limit: Optional[int] = 10):
+    def print_detailed_scores(self, limit: int | None = 10):
         if limit is None:
             limit = len(self.sorted_score_results)
 
@@ -300,7 +341,7 @@ class Query:
         print(f'{len(self.sorted_score_results)} matches\n')
         print(tabulate({
             'Total Score': total_scores,
-            'LiquidMetal Name Score': liquidmetal_name_scores,
+            # 'LiquidMetal Name Score': liquidmetal_name_scores,
             'Item Name': item_names,
             'Last match': last_choice_scores,
             'Recent': recent_launch_scores,
@@ -317,13 +358,16 @@ class Match:
     catalog_item: CatalogItem
     catalog: Catalog = field(repr=False)
     match_chars: str = field(default_factory=str)
-    match_indices: List[int] = field(default_factory=list)
-    score: Optional[Score] = None
+    match_indices: list[int] = field(default_factory=list)
+    score: Score | None = None
+
+    def __repr__(self):
+        return f"Match: match_chars='{self.match_chars}',match_indices={self.match_indices}, score={self.score}"
 
     def __post_init__(self):
         new_word_score = 0
         for char_index in self.match_indices:
-            if self.catalog_item.name[char_index - 1] in WORD_SEPARATORS:
+            if (char_index == 0) or (self.catalog_item.name[char_index - 1] in WORD_SEPARATORS):
                 new_word_score += 1
 
         self.score = Score(catalog_item=self.catalog_item,
@@ -365,7 +409,7 @@ class ScoreResult:
     item: CatalogItem
     match: Match = field(repr=False)
     total_score: float
-    catalog_index: Optional[int] = None
+    catalog_index: int | None = None
 
     def __post_init__(self):
         self.total_score = self.match.score.result
@@ -374,8 +418,8 @@ class ScoreResult:
 @dataclass
 class MatchDetails:
     text: str
-    match_chars: List[str] = field(default_factory=list)
-    match_indices: List[int] = field(default_factory=list)
+    match_chars: list[str] = field(default_factory=list)
+    match_indices: list[int] = field(default_factory=list)
 
     def update_with_new_char(self, new_char):
         # TODO: Check for match. Return new MatchDetails object w/ updated query info if match, otherwise return None.
@@ -413,12 +457,12 @@ class OldQuery:
     new_char: str
     query_so_far: str
     catalog: Catalog = field(repr=False)
-    score_set: Dict[int: Score] = field(repr=False)
-    match_details_set_names: Dict[int: MatchDetails] = field(repr=False)
-    # sorted_items: List[CatalogItem] = field(default_factory=list)
-    sorted_score_results: Optional[Tuple[ScoreResult]] = None
+    score_set: dict[int: Score] = field(repr=False)
+    match_details_set_names: dict[int: MatchDetails] = field(repr=False)
+    # sorted_items: list[CatalogItem] = field(default_factory=list)
+    sorted_score_results: tuple[ScoreResult] | None = None
 
-    def __init__(self, new_char: str, old_query: Optional[OldQuery] = None, catalog: Optional[Catalog] = None):
+    def __init__(self, new_char: str, old_query: OldQuery | None = None, catalog: Catalog | None = None):
         self.new_char = new_char
         if old_query is None:
             self.query_so_far = self.new_char
@@ -530,7 +574,7 @@ class OldQuery:
 @dataclass
 class QuerySet:
     catalog: Catalog
-    queries: Dict[str: OldQuery] = field(default_factory=dict)
+    queries: dict[str: OldQuery] = field(default_factory=dict)
 
     def create_query(self, query_string):
         # Cases:
