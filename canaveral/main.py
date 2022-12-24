@@ -36,7 +36,7 @@ def run():
 
     app = QApplication([])
     app.setFont(QtGui.QFont('Franklin Gothic'))
-    app.setAttribute(Qt.AA_EnableHighDpiScaling)
+    # app.setAttribute(Qt.AA_EnableHighDpiScaling)  # Not needed in PySide6
     app.setQuitOnLastWindowClosed(False)
 
     main_window = CanaveralWindow()

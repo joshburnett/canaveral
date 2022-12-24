@@ -12,36 +12,41 @@ def keys_from_string(keys):
     keysequence = QKeySequence(keys)
     ks = keysequence[0]
 
-    # Calculate the modifiers
-    mods = Qt.NoModifier
-    qtmods = Qt.NoModifier
-    if (ks & Qt.ShiftModifier == Qt.ShiftModifier):
-        mods |= ModsTbl.index(Qt.ShiftModifier)
-        qtmods |= int(Qt.ShiftModifier)
-    if (ks & Qt.AltModifier == Qt.AltModifier):
-        mods |= ModsTbl.index(Qt.AltModifier)
-        qtmods |= int(Qt.AltModifier)
-    if (ks & Qt.ControlModifier == Qt.ControlModifier):
-        mods |= ModsTbl.index(Qt.ControlModifier)
-        qtmods |= int(Qt.ControlModifier)
+    mods = ModsTbl.index(ks.keyboardModifiers())
 
-    # import ipdb
-    # ipdb.set_trace()
+    return mods, ks.key().value
 
-    # Calculate the keys
-    qtkeys = ks ^ int(qtmods)
-    try:
-        keys = KeyTbl[qtkeys]
-        if keys == 0:
-            keys = _get_virtual_key(qtkeys)
-    except ValueError:
-        keys = _get_virtual_key(qtkeys)
-    except IndexError:
-        keys = KeyTbl.index(qtkeys)
-        if keys == 0:
-            keys = _get_virtual_key(qtkeys)
-
-    return mods, keys
+    # Old method that works for PySide 6 6.0-6.3
+    # # Calculate the modifiers
+    # mods = Qt.NoModifier
+    # qtmods = Qt.NoModifier
+    # if ks & Qt.ShiftModifier == Qt.ShiftModifier:
+    #     mods |= ModsTbl.index(Qt.ShiftModifier)
+    #     qtmods |= int(Qt.ShiftModifier)  # PySide
+    # if ks & Qt.AltModifier == Qt.AltModifier:
+    #     mods |= ModsTbl.index(Qt.AltModifier)
+    #     qtmods |= int(Qt.AltModifier)
+    # if ks & Qt.ControlModifier == Qt.ControlModifier:
+    #     mods |= ModsTbl.index(Qt.ControlModifier)
+    #     qtmods |= int(Qt.ControlModifier)
+    #
+    # # import ipdb
+    # # ipdb.set_trace()
+    #
+    # # Calculate the keys
+    # qtkeys = ks ^ int(qtmods)
+    # try:
+    #     keys = KeyTbl[qtkeys]
+    #     if keys == 0:
+    #         keys = _get_virtual_key(qtkeys)
+    # except ValueError:
+    #     keys = _get_virtual_key(qtkeys)
+    # except IndexError:
+    #     keys = KeyTbl.index(qtkeys)
+    #     if keys == 0:
+    #         keys = _get_virtual_key(qtkeys)
+    #
+    # return mods, keys
 
 
 def _get_virtual_key(qtkeys):
