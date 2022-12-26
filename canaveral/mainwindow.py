@@ -3,9 +3,8 @@ from pathlib import Path
 import tomllib
 
 from PySide6 import QtCore, QtGui
-from PySide6.QtWidgets import (QApplication, QMainWindow, QLabel, QDialog, QMenu, QSystemTrayIcon)
-from PySide6.QtCore import Qt
-from PySide6.QtCore import QAbstractNativeEventFilter
+from PySide6.QtWidgets import QApplication, QMainWindow, QLabel, QDialog, QMenu, QSystemTrayIcon
+from PySide6.QtCore import Qt, QAbstractNativeEventFilter, QAbstractEventDispatcher
 
 import win32api
 import win32gui
@@ -15,21 +14,15 @@ from appdirs import AppDirs
 
 # Try different ways of importing, so we can run this as an application installed via pip/pipx,
 # and also just from the source directory.
-try:
-    from canaveral.qtkeybind import keybinder
-    from canaveral.basemodels import SearchPathEntry, Catalog, QuerySet
-    from canaveral.qtmodels import LaunchListModel
-    from canaveral.widgets import CharLineEdit, CharListWidget
-except ImportError:
-    from .qtkeybind import keybinder
-    from .basemodels import SearchPathEntry, Catalog, QuerySet
-    from .qtmodels import LaunchListModel
-    from .widgets import CharLineEdit, CharListWidget
+from canaveral.basemodels import SearchPathEntry, Catalog
+from canaveral.qtmodels import LaunchListModel
+from canaveral.widgets import CharLineEdit, CharListWidget
+from canaveral.qtkeybind import keybinder
 
 
 class WinEventFilter(QAbstractNativeEventFilter):
-    def __init__(self, keybinder):
-        self.keybinder = keybinder
+    def __init__(self, kb):
+        self.keybinder = kb
         super().__init__()
 
     def nativeEventFilter(self, eventType, message):
@@ -66,10 +59,8 @@ class CanaveralWindow(QMainWindow):
             logger.debug('Loaded search path entries from new paths.toml.')
 
         self.catalog = Catalog(self.search_path_entries, launch_data_file=Path(DIRS.user_data_dir) / 'launch_data.txt')
-        self.query_set = QuerySet(catalog=self.catalog)
-        # self.query_set.create_query('doc')
 
-        self.model = LaunchListModel(catalog=self.catalog, query_set=self.query_set, max_launch_list_entries=10)
+        self.model = LaunchListModel(catalog=self.catalog, max_launch_list_entries=10)
 
         self.setup()
         self.setup_sys_tray_icon()
@@ -82,6 +73,13 @@ class CanaveralWindow(QMainWindow):
         self.item_refresh_timer.setInterval(5*60*1000)  # 5 minutes
         self.item_refresh_timer.timeout.connect(self.catalog.refresh_items_list)
         self.item_refresh_timer.start()
+
+        # Install a native event filter to receive events from the OS
+        keybinder.init()
+        keybinder.register_hotkey(self.winId(), "Ctrl+Alt+Space", self.show_main_window_and_focus)
+        self.win_event_filter = WinEventFilter(keybinder)
+        self.event_dispatcher = QAbstractEventDispatcher.instance()
+        self.event_dispatcher.installNativeEventFilter(self.win_event_filter)
 
     def setup_sys_tray_icon(self):
         self.tray = QSystemTrayIcon()
@@ -286,4 +284,4 @@ class CanaveralWindow(QMainWindow):
         logger.info('closeEvent')
         keybinder.unregister_hotkey(self.winId(), "Ctrl+Alt+Space")
         event.accept()
-        sys.exit()
+        QApplication.instance().quit()

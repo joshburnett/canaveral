@@ -3,25 +3,17 @@ from pathlib import Path
 
 from PySide6 import QtGui
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import Qt
-from PySide6.QtCore import QAbstractEventDispatcher
 
 from loguru import logger
 
 # Try different ways of importing, so we can run this as an application installed via pip/pipx,
 # and also just from the source directory.
-try:
-    from canaveral.mainwindow import CanaveralWindow, WinEventFilter, DIRS
-    from canaveral.qtkeybind import keybinder
-    from canaveral.basemodels import SearchPathEntry, Catalog, QuerySet
-    from canaveral.qtmodels import LaunchListModel
-    from canaveral.widgets import CharLineEdit, CharListWidget
-except ImportError:
-    from .mainwindow import CanaveralWindow, WinEventFilter, DIRS
-    from .qtkeybind import keybinder
-    from .basemodels import SearchPathEntry, Catalog, QuerySet
-    from .qtmodels import LaunchListModel
-    from .widgets import CharLineEdit, CharListWidget
+# try:
+if __name__ == '__main__':
+    file = Path(__file__).resolve()
+    sys.path.append(str(file.parent.parent))
+
+from canaveral.mainwindow import CanaveralWindow, DIRS
 
 
 def run():
@@ -40,13 +32,6 @@ def run():
     app.setQuitOnLastWindowClosed(False)
 
     main_window = CanaveralWindow()
-
-    # Install a native event filter to receive events from the OS
-    keybinder.init()
-    keybinder.register_hotkey(main_window.winId(), "Ctrl+Alt+Space", main_window.show_main_window_and_focus)
-    win_event_filter = WinEventFilter(keybinder)
-    event_dispatcher = QAbstractEventDispatcher.instance()
-    event_dispatcher.installNativeEventFilter(win_event_filter)
 
     app.exec()
 

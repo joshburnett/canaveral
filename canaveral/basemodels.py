@@ -5,12 +5,10 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from fnmatch import fnmatch
-from copy import deepcopy
+import string
 
 import winpath
-import numpy as np
 from tabulate import tabulate
-from stringscore import liquidmetal
 import yaml
 from loguru import logger
 
@@ -22,6 +20,7 @@ if Path(sys.executable).stem != 'pythonw':
 #%% Scoring methods & weights:
 # - Most recently selected for given query
 # ? Current query is initial substring of a query for which this was the most recently selected
+# ? This item was previously/recently launched
 # - Consecutive matching letters in name
 # - Initial letters of words
 # - Non-consecutive matching letters in name
@@ -29,41 +28,34 @@ if Path(sys.executable).stem != 'pythonw':
 # - Non-consecutive matching letters in path
 
 LATEST_MATCH_WEIGHT = 5
-PREVIOUSLY_LAUNCHED_WEIGHT = 2.5
+PREVIOUSLY_LAUNCHED_WEIGHT = 4
 CONSEC_NAME_WEIGHT = 2
-INITIAL_LETTERS_NAME_WEIGHT = 1
+INITIAL_LETTERS_NAME_WEIGHT = 1.5
 NONCONSEC_NAME_WEIGHT = 0.5
 NONCONSEC_PATH_WEIGHT = 0.25
 WORD_SEPARATORS = ' \t_-'
 
 
 #%%
-def deep_glob2(path: Path, depth: int = 0, pattern: str = '*', include_dotdirs=False):
+# Add/tweak options for including & searching directories & dot directories
+def deep_glob(path: Path | os.DirEntry, depth: int = 0, patterns: list[str] = ('*',),
+              include_dirs=False, exclude_dotdirs=True, search_dotdirs=False):
     # Negative values for depth will descend into all subdirectories
     try:
         for child in os.scandir(path):
             if child.is_dir():
-                if include_dotdirs or fnmatch(child.name, '[!.]*'):
+                is_not_dotdir = fnmatch(child.name, '[!.]*')
+                if include_dirs and (not exclude_dotdirs or is_not_dotdir):
                     yield child
-                    if depth != 0:
-                        yield from deep_glob2(path=child.path, depth=depth - 1, pattern=pattern)
-            elif fnmatch(child.name, pattern):
-                yield child
-    except PermissionError:
-        pass
-
-
-def deep_glob(path: Path, depth: int = 0, pattern: str = '*', include_dotdirs=False):
-    # Negative values for depth will descend into all subdirectories
-    try:
-        for child in path.iterdir():
-            if child.is_dir():
-                if include_dotdirs or fnmatch(child.name, '[!.]*'):
-                    yield child
-                    if depth != 0:
-                        yield from deep_glob(path=child, depth=depth - 1, pattern=pattern)
-            elif fnmatch(child.name, pattern):
-                yield child
+                if depth != 0 and (search_dotdirs or is_not_dotdir):
+                    yield from deep_glob(path=child.path, depth=depth - 1, patterns=patterns,
+                                         include_dirs=include_dirs, exclude_dotdirs=exclude_dotdirs,
+                                         search_dotdirs=search_dotdirs)
+            else:
+                name = child.name
+                for pattern in patterns:
+                    if fnmatch(name, pattern):
+                        yield child
     except PermissionError:
         pass
 
@@ -74,25 +66,9 @@ def findall(string, char, start=0):
 
 @dataclass(frozen=True)  # needs to be frozen so we can hash it to create a set of these
 class CatalogItem:
-    full_path: Path | os.DirEntry
+    full_path: Path
     name: str | None = field(repr=False, default=None)
     lower_name: str | None = field(repr=False, default=None)
-
-    def __eq__(self, other):
-        # if type(other) is type(self):
-        if isinstance(other, CatalogItem):
-            if isinstance(self.full_path, Path):
-                return self.full_path == other.full_path
-            else:
-                return self.full_path.path == other.full_path.path
-        else:
-            return False
-
-    def __hash__(self):
-        if isinstance(self.full_path, Path):
-            return hash(self.full_path)
-        else:
-            return hash(self.full_path.path)
 
     def __repr__(self):
         return f"CatalogItem(full_path='{self.full_path}')"
@@ -108,6 +84,9 @@ class SearchPathEntry:
     full_path: Path = None  # no need to specify, as it gets created from path
     patterns: list[str] = field(default_factory=lambda: ['*'])
     include_root: bool = False
+    include_dirs: bool = False
+    exclude_dotdirs: bool = True
+    search_dotdirs: bool = False
     search_depth: int = 0
 
     def __post_init__(self):
@@ -132,17 +111,16 @@ class Catalog:
     launch_data_file: Path
 
     def __init__(self, search_paths: list[SearchPathEntry], launch_data_file: Path | None = None,
-                 recent_launch_list_limit: int = 50, glob_algorithm=deep_glob):
+                 recent_launch_list_limit: int = 50):
         self.items = []
         self.search_paths = search_paths
-        self.glob_algorithm = glob_algorithm
-        self.refresh_items_list()
         self.queries = {}
         self.recent_launch_list_limit = recent_launch_list_limit
         self.recent_launches = []
         self.launch_choices = {}
         self.launch_data_file = launch_data_file
         self.load_launch_data_from_file()
+        self.refresh_items_list()
 
     def __repr__(self):
         return f'Catalog: {len(self.items)} items, {len(self.search_paths)} search paths, ' \
@@ -186,19 +164,22 @@ class Catalog:
             expanded_path = search_path.full_path.expanduser()
             if search_path.include_root:
                 items.append(CatalogItem(expanded_path))
-            for pattern in search_path.patterns:
-                if pattern == '.dir':
-                    items += [CatalogItem(item_path)
-                              for item_path in self.glob_algorithm(expanded_path,
-                                                                   depth=search_path.search_depth, pattern='[!.]*')
-                              if item_path.is_dir()]
-                else:
-                    items += [CatalogItem(item_path)
-                              for item_path in self.glob_algorithm(expanded_path,
-                                                                   depth=search_path.search_depth, pattern=pattern)]
+
+            items += [CatalogItem(Path(dir_entry.path))
+                      for dir_entry in deep_glob(expanded_path,
+                                                 depth=search_path.search_depth,
+                                                 patterns=search_path.patterns,
+                                                 include_dirs=search_path.include_dirs,
+                                                 exclude_dotdirs=search_path.exclude_dotdirs,
+                                                 search_dotdirs=search_path.search_dotdirs)]
 
         self.items = list(set(items))
         logger.debug(f'Catalog has {len(self.items)} entries')
+
+        # Pre-populate queries for each letter
+        for letter in string.ascii_lowercase:
+            self.query(letter)
+        logger.debug(f'Searches pre-populated')
 
     def query(self, query_text: str) -> Query:
         if query_text not in self.queries:
@@ -207,8 +188,6 @@ class Catalog:
                 self.queries[query_text] = Query(catalog=self, parent=self.queries[query_text[:-1]], query=query_text)
             else:
                 self.queries[query_text] = Query(catalog=self, parent=self, query=query_text)
-        # else:
-        #     self.queries[query_text].update_query_scores()
 
         return self.queries[query_text]
 
@@ -262,11 +241,6 @@ class Query:
                                                                                match=match,
                                                                                total_score=match.score.result)
 
-            # score_result = score_results.get(match.catalog_item.full_path,
-            #                                  ScoreResult(item=match.catalog_item, total_score=0))
-            # score_result.total_score += match.score.result
-            # score_results[match.catalog_item.full_path] = score_result
-
         self.sorted_score_results = tuple(sorted(self.score_results.values(),
                                                  key=lambda result: result.total_score, reverse=True))
 
@@ -299,15 +273,11 @@ class Query:
         catalog_indices = [result.catalog_index for result in self.sorted_score_results[:limit]]
         full_paths = [result.item.full_path for result in self.sorted_score_results[:limit]]
         item_names = [result.item.full_path.name for result in self.sorted_score_results[:limit]]
-        liquidmetal_name_scores = [result.match.score.liquidmetal_name for result in self.sorted_score_results[:limit]]
-        # liquidmetal_name_scores = [scores[catalog_index].liquidmetal_name
-        #                            for catalog_index in catalog_indices]
 
         print(f'\n\nQuery: {self.query_text}')
         print(f'{len(self.sorted_score_results)} matches\n')
         print(tabulate({
             'Total Score': total_scores,
-            'LiquidMetal Name Score': liquidmetal_name_scores,
             # 'Catalog Index': catalog_indices,
             'Item Name': item_names,
             'Full Path': full_paths,
@@ -324,24 +294,13 @@ class Query:
         consec_name_scores = [result.match.score.consecutive_name for result in self.sorted_score_results[:limit]]
         initial_letter_scores = [result.match.score.initial_letters_name for result in self.sorted_score_results[:limit]]
         nonconsec_name_scores = [result.match.score.nonconsecutive_name for result in self.sorted_score_results[:limit]]
-        liquidmetal_name_scores = [result.match.score.liquidmetal_name for result in self.sorted_score_results[:limit]]
         last_choice_scores = [result.match.score.is_latest_match for result in self.sorted_score_results[:limit]]
         recent_launch_scores = [result.match.score.previously_launched for result in self.sorted_score_results[:limit]]
-
-        # consec_name_scores = [scores[catalog_index].consecutive_name
-        #                       for catalog_index in catalog_indices]
-        # initial_letter_scores = [scores[catalog_index].initial_letters_name
-        #                          for catalog_index in catalog_indices]
-        # nonconsec_name_scores = [scores[catalog_index].nonconsecutive_name
-        #                          for catalog_index in catalog_indices]
-        # liquidmetal_name_scores = [scores[catalog_index].liquidmetal_name
-        #                            for catalog_index in catalog_indices]
 
         print(f'\n\nQuery: {self.query_text}')
         print(f'{len(self.sorted_score_results)} matches\n')
         print(tabulate({
             'Total Score': total_scores,
-            # 'LiquidMetal Name Score': liquidmetal_name_scores,
             'Item Name': item_names,
             'Last match': last_choice_scores,
             'Recent': recent_launch_scores,
@@ -373,12 +332,10 @@ class Match:
         self.score = Score(catalog_item=self.catalog_item,
                            is_latest_match=self.catalog.launch_choices.get(self.match_chars, None) == self.catalog_item.full_path,
                            previously_launched=self.catalog_item.full_path in self.catalog.recent_launches,
-                           liquidmetal_name=liquidmetal.score(self.catalog_item.lower_name, self.match_chars),
                            nonconsecutive_name=len(self.match_indices),
                            consecutive_name=sum([1 if y-x == 1 else 0 for x, y in
                                                  zip(self.match_indices[:-1], self.match_indices[1:])]),
                            initial_letters_name=new_word_score)
-        # self.score.consecutive_name = np.count_nonzero(np.diff(np.array(self.match_indices)) == 1)
 
 
 #%%
@@ -388,7 +345,6 @@ class Score:
     is_latest_match: bool = False
     previously_launched: bool = False
     consecutive_name: float = 0
-    liquidmetal_name: float = 0
     nonconsecutive_name: float = 0
     initial_letters_name: float = 0
     result: float = 0
@@ -413,186 +369,3 @@ class ScoreResult:
 
     def __post_init__(self):
         self.total_score = self.match.score.result
-
-
-@dataclass
-class MatchDetails:
-    text: str
-    match_chars: list[str] = field(default_factory=list)
-    match_indices: list[int] = field(default_factory=list)
-
-    def update_with_new_char(self, new_char):
-        # TODO: Check for match. Return new MatchDetails object w/ updated query info if match, otherwise return None.
-        # Get the index to start searching
-        try:
-            start_char = self.match_indices[-1]+1
-        except IndexError:
-            start_char = 0
-
-        try:
-            self.match_indices.append(self.text[start_char:].index(new_char) + start_char)
-            self.match_chars.append(new_char)
-        except ValueError:
-            return False
-
-        return True
-
-    @property
-    def matched_chars(self):
-        str_list = []
-        last_match_index = -1
-        for index in self.match_indices:
-            str_list.extend([self.text[last_match_index + 1:index],
-                             f'<{self.text[index].upper()}>'])
-            last_match_index = index
-        str_list.append(self.text[last_match_index + 1:])
-        return ''.join(str_list)
-
-    def print_matched_chars(self):
-        print(self.matched_chars)
-
-
-@dataclass
-class OldQuery:
-    new_char: str
-    query_so_far: str
-    catalog: Catalog = field(repr=False)
-    score_set: dict[int: Score] = field(repr=False)
-    match_details_set_names: dict[int: MatchDetails] = field(repr=False)
-    # sorted_items: list[CatalogItem] = field(default_factory=list)
-    sorted_score_results: tuple[ScoreResult] | None = None
-
-    def __init__(self, new_char: str, old_query: OldQuery | None = None, catalog: Catalog | None = None):
-        self.new_char = new_char
-        if old_query is None:
-            self.query_so_far = self.new_char
-            if catalog is None:
-                raise RuntimeError('Must specify either old_query or catalog when creating a new Query object')
-            self.catalog = catalog
-            self.match_details_set_names = {catalog_index: MatchDetails(text=catalog.items[catalog_index].lower_name)
-                                            for catalog_index in range(len(catalog.items))}
-        else:
-            self.query_so_far = old_query.query_so_far + new_char
-            self.catalog = old_query.catalog
-            self.match_details_set_names = deepcopy(old_query.match_details_set_names)
-
-        self.score_set = {catalog_index: Score() for catalog_index in self.match_details_set_names}
-
-        self._update_matches()
-        self._update_scores()
-
-    def _update_matches(self):
-        # Check list of name matches for new character
-        drop_indices = []
-        for catalog_index, match_details in self.match_details_set_names.items():
-            result = match_details.update_with_new_char(self.new_char)
-            if not result:
-                drop_indices.append(catalog_index)
-
-        for catalog_index in drop_indices:
-            # Can use del since the key is guaranteed to exist (faster than .pop()).
-            del self.match_details_set_names[catalog_index]
-            # self.match_details_set_names.pop(catalog_index, None)
-
-    def _update_scores(self):
-        score_set = self.score_set
-        query_so_far = self.query_so_far
-
-        for catalog_index, match in self.match_details_set_names.items():
-            score = score_set[catalog_index]
-            score.liquidmetal_name = liquidmetal.score(match.text, query_so_far)
-            score.nonconsecutive_name = len(match.match_indices)
-            score.consecutive_name = np.count_nonzero(np.diff(np.array(match.match_indices)) == 1)
-            new_word_score = 0
-            for char_index in match.match_indices:
-                if match.text[char_index - 1] in WORD_SEPARATORS:
-                    new_word_score += 1
-            score.initial_letters_name = new_word_score
-            score_set[catalog_index].update_total()
-
-        self.sorted_score_results = tuple(sorted([ScoreResult(item=self.catalog.items[catalog_index],
-                                                              total_score=self.score_set[catalog_index].result,
-                                                              catalog_index=catalog_index)
-                                                  for catalog_index in self.match_details_set_names],
-                                                 key=lambda result: result.total_score, reverse=True))
-
-    # @property
-    # def sorted_scores(self):
-    #     return sorted([(self.score_set[catalog_index].result, catalog_index,
-    #                     self.catalog.items[catalog_index].full_path)
-    #                    for catalog_index in self.match_details_set_paths],
-    #                   key=lambda item: item[0], reverse=True)
-
-    def print_matched_name_chars(self):
-        for match in self.match_details_set_names.values():
-            match.print_matched_chars()
-
-    def print_scores(self):
-        scores = self.score_set
-        total_scores = [result.total_score for result in self.sorted_score_results]
-        catalog_indices = [result.catalog_index for result in self.sorted_score_results]
-        full_paths = [result.item.full_path for result in self.sorted_score_results]
-        liquidmetal_name_scores = [scores[catalog_index].liquidmetal_name
-                                   for catalog_index in catalog_indices]
-
-        print(f'\n\nQuery: {self.query_so_far}')
-        print(f'{len(self.sorted_score_results)} matches\n')
-        print(tabulate({
-            'Total Score': total_scores,
-            'LiquidMetal Name Score': liquidmetal_name_scores,
-            'Catalog Index': catalog_indices,
-            'Full Path': full_paths,
-        }, headers='keys'))
-
-    def print_detailed_scores(self):
-        scores = self.score_set
-        total_scores = [result.total_score for result in self.sorted_score_results]
-        catalog_indices = [result.catalog_index for result in self.sorted_score_results]
-        full_paths = [result.item.full_path for result in self.sorted_score_results]
-        consec_name_scores = [scores[catalog_index].consecutive_name
-                              for catalog_index in catalog_indices]
-        initial_letter_scores = [scores[catalog_index].initial_letters_name
-                                 for catalog_index in catalog_indices]
-        nonconsec_name_scores = [scores[catalog_index].nonconsecutive_name
-                                 for catalog_index in catalog_indices]
-        liquidmetal_name_scores = [scores[catalog_index].liquidmetal_name
-                                   for catalog_index in catalog_indices]
-
-        print(f'\n\nQuery: {self.query_so_far}')
-        print(f'{len(self.sorted_score_results)} matches\n')
-        print(tabulate({
-            'Total Score': total_scores,
-            'LiquidMetal Name Score': liquidmetal_name_scores,
-            'Catalog Index': catalog_indices,
-            'Consecutive Name': consec_name_scores,
-            'Initial Letter': initial_letter_scores,
-            'Non-consec Name': nonconsec_name_scores,
-            'Full Path': full_paths,
-        }, headers='keys'))
-
-
-@dataclass
-class QuerySet:
-    catalog: Catalog
-    queries: dict[str: OldQuery] = field(default_factory=dict)
-
-    def create_query(self, query_string):
-        # Cases:
-        # - Same as existing query
-        #   - Look up & return existing query
-        # - New single-letter query
-        #   - Start a new query, store & return it
-        # - At least partially based on an old query
-        #   Naive implementation
-        #   - Take a letter off the end and recurse in until either a base query is found or at an empty query string
-        #       - Return the base query if found
-        #       - If at an empty string, start a new one
-        #   - Return the base query and build up one letter at a time until we reach the
-        if query_string not in self.queries:
-            if len(query_string) == 1:
-                self.queries[query_string] = OldQuery(new_char=query_string, catalog=self.catalog)
-            else:
-                sub_query = self.create_query(query_string=query_string[:-1])
-                self.queries[query_string] = OldQuery(new_char=query_string[-1], old_query=sub_query)
-
-        return self.queries[query_string]

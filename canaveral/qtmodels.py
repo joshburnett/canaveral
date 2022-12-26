@@ -5,21 +5,16 @@ from PySide6.QtCore import Qt
 
 from loguru import logger
 
-try:
-    from canaveral.basemodels import Catalog, QuerySet, Query
-except ImportError:
-    from .basemodels import Catalog, QuerySet, Query
+from canaveral.basemodels import Catalog, Query
 
 
 class LaunchListModel(QtCore.QAbstractListModel):
     catalog: Catalog
-    # query_set: QuerySet
     query: Optional[Query]
 
-    def __init__(self, *args, catalog: Catalog, query_set: QuerySet, max_launch_list_entries=10, **kwargs):
+    def __init__(self, *args, catalog: Catalog, max_launch_list_entries=10, **kwargs):
         super(LaunchListModel, self).__init__(*args, **kwargs)
         self.query_string = None
-        self.query_set = query_set
         self.query = None
         self.catalog = catalog
         self.max_launch_list_entries = max_launch_list_entries
