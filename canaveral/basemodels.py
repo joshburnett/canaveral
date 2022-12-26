@@ -142,15 +142,16 @@ class Catalog:
             self.launch_choices = {q: Path(pathstr) for q, pathstr in launch_data['launch choices'].items()}
             self.recent_launches = [Path(pathstr) for pathstr in launch_data['recent launches']]
 
-    def update_launch_data(self, query_string: str, launch_choice: Path) -> None:
-        self.launch_choices[query_string] = launch_choice
+    def update_launch_data(self, query_string: str, new_launch_choice: Path) -> None:
+        old_launch_choice = self.launch_choices.get(query_string, None)
+        self.launch_choices[query_string] = new_launch_choice
         try:
-            old_index = self.recent_launches.index(launch_choice)
+            old_index = self.recent_launches.index(new_launch_choice)
             self.recent_launches.pop(old_index)
         except ValueError:  # item wasn't in list
             pass
 
-        self.recent_launches.insert(0, launch_choice)
+        self.recent_launches.insert(0, new_launch_choice)
         while len(self.recent_launches) > self.recent_launch_list_limit:
             self.recent_launches.pop()
 
@@ -161,8 +162,19 @@ class Catalog:
         with open(self.launch_data_file, 'w') as file:
             yaml.dump(data, file, width=1000)
 
-        for query_text, query in self.queries.items():
-            query.update_match_score_if_relevant(launch_choice)
+        if old_launch_choice == new_launch_choice:
+            logger.info(f'Updating scores for {new_launch_choice.name}')
+        else:
+            logger.info(f'Updating scores for new: {new_launch_choice.name}, old: {old_launch_choice.name}')
+
+        updates = 0
+        for query in self.queries.values():
+            if old_launch_choice != new_launch_choice:
+                query.update_match_score_if_relevant(old_launch_choice)
+                updates += 1
+            query.update_match_score_if_relevant(new_launch_choice)
+            updates += 1
+        logger.info(f'{updates} updates completed')
 
     def refresh_items_list(self) -> None:
         logger.debug('Refreshing catalog items list')
@@ -256,6 +268,7 @@ class Query:
 
     def update_match_score_if_relevant(self, item_path: Path) -> None:
         if item_path in self.score_results:
+            del self.score_results[item_path]
             for match in self.matches:
                 if match.catalog_item.full_path == item_path:
                     if item_path in match.catalog.recent_launches:
@@ -268,10 +281,13 @@ class Query:
                         match.score.is_latest_match = False
 
                     match.score.update_total()
-                    if match.score.result > self.score_results[match.catalog_item.full_path].total_score:
-                        self.score_results[match.catalog_item.full_path] = ScoreResult(item=match.catalog_item,
-                                                                                       match=match,
-                                                                                       total_score=match.score.result)
+
+                score_result = self.score_results.get(match.catalog_item.full_path, None)
+                if (score_result is None) or (match.score.result > score_result.total_score):
+                    self.score_results[match.catalog_item.full_path] = ScoreResult(item=match.catalog_item,
+                                                                                   match=match,
+                                                                                   total_score=match.score.result)
+
             self.sorted_score_results = tuple(sorted(self.score_results.values(),
                                                      key=lambda result: result.total_score, reverse=True))
 

@@ -248,7 +248,7 @@ class CanaveralWindow(QMainWindow):
             logger.debug(f'Executing: {item.full_path}')
             win32api.ShellExecute(0, None, str(item.full_path), '', '', 1)
 
-            self.catalog.update_launch_data(query_string=self.line_input.text(), launch_choice=item.full_path)
+            self.catalog.update_launch_data(query_string=self.line_input.text(), new_launch_choice=item.full_path)
 
         elif key in (Qt.Key_Down, Qt.Key_Up, Qt.Key_PageDown, Qt.Key_PageUp):
             if self.launch_list_view.isVisible():
