@@ -6,9 +6,8 @@ from PySide6.QtWidgets import QApplication
 
 from loguru import logger
 
-# Try different ways of importing, so we can run this as an application installed via pip/pipx,
-# and also just from the source directory.
-# try:
+# Add application source directory to the path if needed. Allows us to run this as an application installed via
+# pip/pipx, and also just from the source directory.
 if __name__ == '__main__':
     file = Path(__file__).resolve()
     sys.path.append(str(file.parent.parent))
@@ -28,7 +27,6 @@ def run():
 
     app = QApplication([])
     app.setFont(QtGui.QFont('Franklin Gothic'))
-    # app.setAttribute(Qt.AA_EnableHighDpiScaling)  # Not needed in PySide6
     app.setQuitOnLastWindowClosed(False)
 
     main_window = CanaveralWindow()

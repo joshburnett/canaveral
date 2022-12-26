@@ -21,6 +21,7 @@ from canaveral.qtkeybind import keybinder
 
 
 class WinEventFilter(QAbstractNativeEventFilter):
+    """Used for intercepting keyboard events for global hotkeys"""
     def __init__(self, kb):
         self.keybinder = kb
         super().__init__()
@@ -42,6 +43,8 @@ def load_search_paths(paths_file_path: Path | str) -> list[SearchPathEntry]:
 
 
 class CanaveralWindow(QMainWindow):
+    """Application's main window (the search window)"""
+
     def __init__(self):
         super().__init__()
 

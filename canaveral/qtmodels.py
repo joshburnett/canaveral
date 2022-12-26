@@ -1,5 +1,3 @@
-from typing import List, Optional, Dict, Union
-
 from PySide6 import QtCore, QtGui, QtWidgets, QtUiTools
 from PySide6.QtCore import Qt
 
@@ -9,8 +7,12 @@ from canaveral.basemodels import Catalog, Query
 
 
 class LaunchListModel(QtCore.QAbstractListModel):
+    """
+    Model associated with the LaunchList widget: the drop-down list of items matching a query, from which the user
+    chooses an item to launch. Manages the text & icon that gets displayed.
+    """
     catalog: Catalog
-    query: Optional[Query]
+    query: Query | None
 
     def __init__(self, *args, catalog: Catalog, max_launch_list_entries=10, **kwargs):
         super(LaunchListModel, self).__init__(*args, **kwargs)
@@ -22,7 +24,7 @@ class LaunchListModel(QtCore.QAbstractListModel):
         # self.mime_database = QtCore.QMimeDatabase()
         self.file_icon_provider = QtWidgets.QFileIconProvider()
 
-    def set_query(self, query_string: Optional[str]):
+    def set_query(self, query_string: str | None):
         if query_string in [None, '']:
             self.query_string = None
             self.query = None
@@ -31,7 +33,7 @@ class LaunchListModel(QtCore.QAbstractListModel):
             self.query = self.catalog.query(query_string)
         self.layoutChanged.emit()
 
-    def data(self, index: Union[QtCore.QModelIndex, QtCore.QPersistentModelIndex],
+    def data(self, index: QtCore.QModelIndex | QtCore.QPersistentModelIndex,
              role: int = QtCore.Qt.ItemDataRole.DisplayRole):
         score_result = self.query.sorted_score_results[index.row()]
 
@@ -68,7 +70,7 @@ class LaunchListModel(QtCore.QAbstractListModel):
         # else:
         #     return icon
 
-    def rowCount(self, parent: Union[QtCore.QModelIndex, QtCore.QPersistentModelIndex] = QtCore.QModelIndex) -> int:
+    def rowCount(self, parent: QtCore.QModelIndex | QtCore.QPersistentModelIndex = QtCore.QModelIndex) -> int:
         return min(self.num_results(), self.max_launch_list_entries)
 
     def num_results(self):

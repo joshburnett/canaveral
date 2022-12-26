@@ -47,7 +47,7 @@ Running Canaveral
 1. If you've installed Canaveral into your own virtual environment, you'll need to activate it first. You can skip this step if you installed Canaveral via `pipx`.
 2. Run from the command line: `canaveral`.
 3. Canaveral looks in %APPDATA%\Canaveral for a file called paths.py that defines the locations and extensions it should index. The first time you run Canaveral, this directory is created and a paths.py with the default search locations will be placed there. Modify this file to suit your needs and save it in place, as paths.py.
-4. Bring up the Canaveral window with the Ctrl+Alt+Space hotkey.
+4. Bring up the Canaveral window with the `Ctrl+Alt+Space` hotkey.
 5. Start typing your search.
 6. Select your desired entry from the drop-down list (via keyboard or mouse) and press enter. If no entry is selected, the first item in the list will be launched (so there's no need to select it).
 7. As you search for items and launch them, Canaveral will remember your choices and place the launched items at the top of the results for relevant searches.

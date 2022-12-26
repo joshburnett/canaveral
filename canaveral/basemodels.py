@@ -37,7 +37,6 @@ WORD_SEPARATORS = ' \t_-'
 
 
 #%%
-# Add/tweak options for including & searching directories & dot directories
 def deep_glob(path: Path | os.DirEntry, depth: int = 0, patterns: list[str] = ('*',),
               include_dirs=False, exclude_dotdirs=True, search_dotdirs=False):
     # Negative values for depth will descend into all subdirectories
@@ -66,6 +65,10 @@ def findall(string, char, start=0):
 
 @dataclass(frozen=True)  # needs to be frozen so we can hash it to create a set of these
 class CatalogItem:
+    """
+    Represents an item in a catalog. Initialized w/ the full path of an item and constructs the name and
+    lower-case name from this.
+    """
     full_path: Path
     name: str | None = field(repr=False, default=None)
     lower_name: str | None = field(repr=False, default=None)
@@ -80,6 +83,7 @@ class CatalogItem:
 
 @dataclass
 class SearchPathEntry:
+    """Represents a location that should be indexed, along with parameters that control what to index"""
     path: str  # can be a shortcut abbreviation or a regular string
     full_path: Path = None  # no need to specify, as it gets created from path
     patterns: list[str] = field(default_factory=lambda: ['*'])
@@ -101,6 +105,11 @@ class SearchPathEntry:
 
 # @dataclass
 class Catalog:
+    """
+    Stores the file index, along with the queries that have been executed (and their results), the paths
+    being searched, the record of what the user has chosen to launch from past queries, the list of
+    recently-launched items in the index, and the location of a file that stores the user's choices
+    """
     items: list[CatalogItem]
     queries: dict[str, Query]
     search_paths: list[SearchPathEntry]
@@ -194,6 +203,7 @@ class Catalog:
 
 @dataclass
 class Query:
+    """Stores a list of Match objects corresponding to a given query string, along with the match scores"""
     query_text: str
     matches: list[Match] = field(repr=False)
     score_results: dict[Path: ScoreResult] = field(repr=False)
@@ -314,6 +324,12 @@ class Query:
 
 @dataclass
 class Match:
+    """
+    Details about a CatalogItem that matches a query string, including:
+    - the characters that resulted in the match
+    - the indices where those characters were found in the CatalogItem's name
+    - the resulting Score object
+    """
     catalog_item: CatalogItem
     catalog: Catalog = field(repr=False)
     match_chars: str = field(default_factory=str)
@@ -341,6 +357,7 @@ class Match:
 #%%
 @dataclass
 class Score:
+    """Stores the individual components that go into the numerical match score"""
     catalog_item: CatalogItem
     is_latest_match: bool = False
     previously_launched: bool = False
@@ -362,6 +379,7 @@ class Score:
 
 @dataclass
 class ScoreResult:
+    """Contains the total score for a given Match & CatalogItem"""
     item: CatalogItem
     match: Match = field(repr=False)
     total_score: float
