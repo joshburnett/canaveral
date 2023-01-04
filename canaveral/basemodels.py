@@ -162,7 +162,7 @@ class Catalog:
         with open(self.launch_data_file, 'w') as file:
             yaml.dump(data, file, width=1000)
 
-        if old_launch_choice == new_launch_choice:
+        if (old_launch_choice == new_launch_choice) or (old_launch_choice is None):
             logger.info(f'Updating scores for {new_launch_choice.name}')
         else:
             logger.info(f'Updating scores for new: {new_launch_choice.name}, old: {old_launch_choice.name}')
